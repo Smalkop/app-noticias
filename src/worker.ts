@@ -50,7 +50,7 @@ app.get('/api/categorias', async (c) => {
     return c.json(results || []);
   } catch (error: any) {
     console.error('Categorias Error:', error.message, error.stack);
-    return c.json({ error: 'Error al obtener categorías', details: error.message }, 500);
+    return c.json({ error: error.message || 'Error al obtener categorías', details: error.message }, 500);
   }
 });
 
@@ -96,7 +96,7 @@ app.post('/api/auth/login', async (c) => {
       secure: true,
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60,
-      sameSite: 'None',
+      sameSite: 'Lax',
     });
 
     return c.json({ 
@@ -230,7 +230,7 @@ app.post('/api/auth/google', async (c) => {
       secure: true,
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60,
-      sameSite: 'None',
+      sameSite: 'Lax',
     });
 
     return c.json({ id: user.id, email: user.email, nombre: user.nombre, rol: user.rol, foto_perfil: user.foto_perfil });
@@ -242,7 +242,7 @@ app.post('/api/auth/google', async (c) => {
 
 // Auth: Logout
 app.post('/api/auth/logout', (c) => {
-  deleteCookie(c, 'token', { path: '/', sameSite: 'None', secure: true });
+  deleteCookie(c, 'token', { path: '/', sameSite: 'Lax', secure: true });
   return c.json({ message: 'Sesión cerrada' });
 });
 
@@ -418,6 +418,7 @@ app.get('/api/metricas', async (c) => {
     }
     query += ' GROUP BY n.id, n.titulo ORDER BY total_visitas DESC LIMIT 5';
     
+    console.log('Metricas Query:', query, params);
     const { results } = await c.env.DB.prepare(query).bind(...params).all();
     if (!results) {
       console.warn('Metricas returned no results (undefined or null)');
@@ -426,10 +427,10 @@ app.get('/api/metricas', async (c) => {
   } catch (error: any) {
     console.error('Metricas Error:', error.message, error.stack);
     return c.json({ 
-      error: 'Error al obtener métricas', 
+      error: error.message || 'Error al obtener métricas', 
       details: error.message,
       stack: error.stack,
-      hint: 'Asegúrate de que la tabla metricas_visitas exista y tenga datos.'
+      hint: 'Asegúrate de que la tabla metricas_visitas y noticias existan.'
     }, 500);
   }
 });
