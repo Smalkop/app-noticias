@@ -3,5 +3,12 @@
   "include": [
     "/api/*"
   ],
-  "exclude": []
+  "exclude": [
+    "/assets/*",
+    "/*.js",
+    "/*.css",
+    "/*.png",
+    "/*.jpg",
+    "/*.svg"
+  ]
 }

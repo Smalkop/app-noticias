@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "deploy": "wrangler pages deploy ./dist --branch main --functions ./functions",
+    "deploy": "echo 'Deploy handled by Cloudflare GitHub integration'",
     "start-vite": "vite --port 5173 --host 0.0.0.0"
   },
   "dependencies": {
