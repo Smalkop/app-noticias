@@ -1,11 +1,23 @@
 import { User, Noticia, Categoria, Metrica } from '../types';
 
 async function handleResponse(response: Response) {
+  const contentType = response.headers.get('content-type');
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Algo salió mal');
+    let errorMessage = 'Algo salió mal';
+    if (contentType && contentType.includes('application/json')) {
+      const error = await response.json();
+      errorMessage = error.error || errorMessage;
+    } else {
+      const text = await response.text();
+      errorMessage = `Error ${response.status}: ${text.slice(0, 100)}`;
+    }
+    throw new Error(errorMessage);
   }
-  return response.json();
+  
+  if (contentType && contentType.includes('application/json')) {
+    return response.json();
+  }
+  return response.text();
 }
 
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
