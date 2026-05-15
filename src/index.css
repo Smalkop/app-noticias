@@ -1,0 +1,21 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, serif;
+}
+
+@layer base {
+  body {
+    @apply font-sans bg-gray-50 text-gray-900;
+  }
+}
+
+.prose h1, .prose h2, .prose h3 {
+  @apply font-serif font-bold text-gray-900;
+}
+
+.news-card-title {
+  @apply font-serif text-xl font-bold leading-tight hover:text-blue-600 transition-colors;
+}
