@@ -1,4 +1,4 @@
-name = "noticias-py"
+name = "app-noticias"
 pages_build_output_dir = "./dist"
 compatibility_date = "2024-12-01"
 
