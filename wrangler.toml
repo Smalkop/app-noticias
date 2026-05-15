@@ -17,3 +17,6 @@ bucket_name = "noticias-py-images"
 [[kv_namespaces]]
 binding = "SESSIONS"
 id = "tu-id-de-kv-aqui"
+
+# wrangler.toml
+name = 'app-noticias'
