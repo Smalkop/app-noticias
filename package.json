@@ -4,12 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run start-vite\" \"wrangler pages dev . --proxy 5173 --port 3000\"",
+    "dev": "concurrently \"npm run start-vite\" \"wrangler pages dev --proxy 5173 --port 3000 --compatibility-date 2024-12-01\"",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "deploy": "wrangler pages deploy ./dist",
+    "deploy": "wrangler pages deploy ./dist --branch main --functions ./functions",
     "start-vite": "vite --port 5173 --host 0.0.0.0"
   },
   "dependencies": {

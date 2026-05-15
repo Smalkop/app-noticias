@@ -45,7 +45,13 @@ export const api = {
   
   noticias: {
     list: (params: any = {}): Promise<Noticia[]> => {
-      const searchParams = new URLSearchParams(params);
+      const cleanParams: any = {};
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== 'undefined') {
+          cleanParams[key] = params[key];
+        }
+      });
+      const searchParams = new URLSearchParams(cleanParams);
       return fetchWithAuth(`/api/noticias?${searchParams}`);
     },
     
