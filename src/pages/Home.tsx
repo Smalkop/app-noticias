@@ -83,7 +83,7 @@ export default function Home() {
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-12">
-          {(!categoria && !query ? others : noticias).map((noticia) => (
+          {Array.isArray(noticias) && (!categoria && !query ? others : noticias).map((noticia) => (
             <NewsCard key={noticia.id} noticia={noticia} />
           ))}
         </div>

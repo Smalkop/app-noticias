@@ -42,8 +42,9 @@ app.get('/api/health', (c) => c.json({ status: 'ok' }));
 app.get('/api/categorias', async (c) => {
   try {
     const { results } = await c.env.DB.prepare('SELECT * FROM categorias WHERE activa = 1').all();
-    return c.json(results);
+    return c.json(results || []);
   } catch (error: any) {
+    console.error('Categorias Error:', error);
     return c.json({ error: 'Error al obtener categorías', details: error.message }, 500);
   }
 });
@@ -140,8 +141,9 @@ app.get('/api/noticias', async (c) => {
     params.push(limit, offset);
 
     const { results } = await c.env.DB.prepare(query).bind(...params).all();
-    return c.json(results);
+    return c.json(results || []);
   } catch (error: any) {
+    console.error('Noticias Error:', error);
     return c.json({ error: 'Error al obtener noticias', details: error.message }, 500);
   }
 });
@@ -224,8 +226,9 @@ app.get('/api/metricas', async (c) => {
     query += ' GROUP BY n.id ORDER BY total_visitas DESC LIMIT 5';
     
     const { results } = await c.env.DB.prepare(query).bind(...params).all();
-    return c.json(results);
+    return c.json(results || []);
   } catch (error: any) {
+    console.error('Metricas Error:', error);
     return c.json({ error: 'Error al obtener métricas', details: error.message }, 500);
   }
 });

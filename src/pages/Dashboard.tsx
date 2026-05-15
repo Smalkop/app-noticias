@@ -110,7 +110,7 @@ export default function Dashboard({ user }: DashboardProps) {
               <FileText className="w-5 h-5 text-red-600" /> Noticias más leídas
             </h3>
             <div className="space-y-6">
-              {metricas.map((m, i) => (
+              {Array.isArray(metricas) && metricas.map((m, i) => (
                 <div key={i} className="flex items-center gap-4">
                   <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-400 text-xs">
                     {i + 1}
@@ -192,7 +192,7 @@ export default function Dashboard({ user }: DashboardProps) {
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none appearance-none"
                 >
                   <option value="">Seleccionar...</option>
-                  {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  {Array.isArray(categorias) && categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
               </div>
 

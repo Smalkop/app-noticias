@@ -36,7 +36,7 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-6">
-            {categorias.slice(0, 5).map((cat) => (
+            {Array.isArray(categorias) && categorias.slice(0, 5).map((cat) => (
               <Link 
                 key={cat.id} 
                 to={`/?categoria=${cat.slug}`} 

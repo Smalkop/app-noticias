@@ -63,12 +63,11 @@ export default function App() {
   useEffect(() => {
     async function init() {
       try {
-        const [userData, categoriesData] = await Promise.all([
-          api.auth.me().catch(() => null),
-          api.categorias.list()
-        ]);
+        const userData = await api.auth.me().catch(() => null);
+        const categoriesData = await api.categorias.list().catch(() => []);
+        
         setUser(userData);
-        setCategorias(categoriesData);
+        setCategorias(Array.isArray(categoriesData) ? categoriesData : []);
       } catch (err) {
         console.error('Failed to initialize', err);
       } finally {
