@@ -2,10 +2,13 @@ name = "noticias-py"
 pages_build_output_dir = "./dist"
 compatibility_date = "2024-12-01"
 
+[assets]
+directory = "./dist"
+
 [[d1_databases]]
-binding = "DB" # Este es el nombre que usarás en tu código (env.DB)
+binding = "DB"
 database_name = "noticias-py-db"
-database_id = "tu-id-de-base-de-datos-aqui"
+database_id = "0a372c4a-335e-4fc4-b8c7-e0c9ace06f16"
 
 [[r2_buckets]]
 binding = "IMAGES"
