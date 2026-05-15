@@ -117,10 +117,10 @@ app.post('/api/auth/registro', async (c) => {
 
     const id = crypto.randomUUID();
     
-    // Insertamos según el esquema de usuarios
+    // El esquema de setup_d1.sql no tiene 'activo', lo removemos o lo agregamos al SQL
     await c.env.DB.prepare(
-      'INSERT INTO usuarios (id, email, password_hash, nombre, rol, activo) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(id, email, password, nombre, 'autor', 1).run();
+      'INSERT INTO usuarios (id, email, password_hash, nombre, rol) VALUES (?, ?, ?, ?, ?)'
+    ).bind(id, email, password, nombre, 'autor').run();
 
     return c.json({ id, email, nombre }, 201);
   } catch (error: any) {
@@ -129,6 +129,64 @@ app.post('/api/auth/registro', async (c) => {
       return c.json({ error: 'El email ya está registrado' }, 400);
     }
     return c.json({ error: 'Error al registrar usuario', details: error.message }, 400);
+  }
+});
+
+// Setup: Inicializar Database (Ruta temporal de utilidad)
+app.get('/api/setup-db', async (c) => {
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS usuarios (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT,
+        nombre TEXT NOT NULL,
+        rol TEXT DEFAULT 'autor',
+        foto_perfil TEXT,
+        bio TEXT,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`),
+      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS categorias (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        slug TEXT UNIQUE NOT NULL,
+        activa INTEGER DEFAULT 1
+      )`),
+      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS noticias (
+        id TEXT PRIMARY KEY,
+        autor_id TEXT NOT NULL,
+        categoria_id INTEGER NOT NULL,
+        titulo TEXT NOT NULL,
+        subtitulo TEXT,
+        contenido TEXT NOT NULL,
+        imagen_destacada TEXT,
+        estado TEXT DEFAULT 'borrador',
+        destacada INTEGER DEFAULT 0,
+        publicado_en DATETIME,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (autor_id) REFERENCES usuarios(id),
+        FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+      )`),
+      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS metricas_visitas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        noticia_id TEXT NOT NULL,
+        fecha DATE NOT NULL,
+        visitas INTEGER DEFAULT 0,
+        UNIQUE(noticia_id, fecha),
+        FOREIGN KEY (noticia_id) REFERENCES noticias(id)
+      )`),
+      c.env.DB.prepare(`INSERT OR IGNORE INTO categorias (nombre, slug) VALUES 
+        ('Política', 'politica'),
+        ('Economía', 'economia'),
+        ('Deportes', 'deportes'),
+        ('Cultura', 'cultura'),
+        ('Tecnología', 'tecnologia'),
+        ('Internacional', 'internacional')`)
+    ]);
+    return c.json({ message: 'Base de datos inicializada correctamente' });
+  } catch (error: any) {
+    return c.json({ error: 'Error al inicializar la base de datos', details: error.message }, 500);
   }
 });
 
@@ -153,8 +211,8 @@ app.post('/api/auth/google', async (c) => {
       // Crear usuario si no existe
       const id = crypto.randomUUID();
       await c.env.DB.prepare(
-        'INSERT INTO usuarios (id, email, password_hash, nombre, foto_perfil, rol, activo) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).bind(id, email, 'google-auth-' + google_id, name, picture, 'autor', 1).run();
+        'INSERT INTO usuarios (id, email, password_hash, nombre, foto_perfil, rol) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(id, email, 'google-auth-' + google_id, name, picture, 'autor').run();
       
       user = await c.env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first();
     }
