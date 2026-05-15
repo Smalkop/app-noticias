@@ -2,16 +2,18 @@ import { Hono } from 'hono';
 import { jwt, sign, verify } from 'hono/jwt';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { cors } from 'hono/cors';
+import { logger } from 'hono/logger';
 
 type Bindings = {
   DB: D1Database;
   IMAGES: R2Bucket;
-  SESSIONS: KVNamespace;
   ASSETS: { fetch: typeof fetch };
   JWT_SECRET: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
+
+app.use('*', logger());
 
 // Secret key for JWT
 const DEFAULT_SECRET = 'noticias-py-secret-key';
@@ -63,7 +65,7 @@ app.get('/api/auth/me', async (c) => {
 
 // Auth: Login
 app.post('/api/auth/login', async (c) => {
-  const { email, password } = await c.request.json();
+  const { email, password } = await c.req.json();
   const user: any = await c.env.DB.prepare('SELECT * FROM usuarios WHERE email = ?').bind(email).first();
 
   if (!user || user.password_hash !== password) { // Simplificado: en producción usar hash
@@ -87,15 +89,17 @@ app.post('/api/auth/login', async (c) => {
 // Auth: Registro
 app.post('/api/auth/registro', async (c) => {
   try {
-    const { email, password, nombre } = await c.request.json();
+    const { email, password, nombre } = await c.req.json();
     const id = crypto.randomUUID();
     
+    // El esquema actual no tiene 'activo', así que lo omitimos
     await c.env.DB.prepare(
-      'INSERT INTO usuarios (id, email, password_hash, nombre, rol, activo) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(id, email, password, nombre, 'autor', 1).run();
+      'INSERT INTO usuarios (id, email, password_hash, nombre, rol) VALUES (?, ?, ?, ?, ?)'
+    ).bind(id, email, password, nombre, 'autor').run();
 
     return c.json({ id, email, nombre }, 201);
   } catch (error: any) {
+    console.error('Registration Error:', error);
     return c.json({ error: 'El email ya existe o datos inválidos', details: error.message }, 400);
   }
 });
@@ -230,20 +234,27 @@ app.get('/api/metricas', async (c) => {
 app.all('*', async (c) => {
   const url = new URL(c.req.url);
   
+  // Si es una ruta de API que no existía arriba, devolvemos 404 JSON
+  if (url.pathname.startsWith('/api/')) {
+    return c.json({ error: 'Ruta de API no encontrada', path: url.pathname }, 404);
+  }
+
   // Si la ruta parece un archivo estático (tiene extensión), intentar servirlo
   if (url.pathname.includes('.')) {
     return c.env.ASSETS.fetch(c.req.raw);
   }
   
   // Para SPA, si no es una ruta de API, servir index.html
-  // Intentamos obtener index.html de los assets
-  const indexResponse = await c.env.ASSETS.fetch(new Request(new URL('/index.html', c.req.url)));
-  if (indexResponse.ok) {
-    return indexResponse;
+  try {
+    const indexResponse = await c.env.ASSETS.fetch(new Request(new URL('/index.html', c.req.url)));
+    if (indexResponse.ok) {
+      return indexResponse;
+    }
+  } catch (err) {
+    console.error('Error fetching index.html:', err);
   }
   
-  // Si todo falla, error 404
-  return c.json({ error: 'No encontrado' }, 404);
+  return c.text('Not Found', 404);
 });
 
 export default app;

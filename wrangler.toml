@@ -14,7 +14,3 @@ database_id = "0a372c4a-335e-4fc4-b8c7-e0c9ace06f16"
 [[r2_buckets]]
 binding = "IMAGES"
 bucket_name = "noticias-py-images"
-
-[[kv_namespaces]]
-binding = "SESSIONS"
-id = "tu-id-de-kv-aqui"
