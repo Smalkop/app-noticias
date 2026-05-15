@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "deploy": "echo 'Deploy handled by Cloudflare GitHub integration'",
-    "start-vite": "vite --port 5173 --host 0.0.0.0"
+    "deploy": "echo 'Build finished. Cloudflare Pages will deploy automatically from GitHub.'",
+    "start-vite": "vite --port 3000 --host 0.0.0.0"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

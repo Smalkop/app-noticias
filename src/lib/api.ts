@@ -26,8 +26,13 @@ async function handleResponse(response: Response) {
 }
 
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
-  // Asegurar que la URL sea absoluta respecto a la raíz del dominio para evitar 404s por rutas relativas
-  const fullUrl = url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`;
+  // Asegurar que la URL sea absoluta respecto al origen actual para evitar 404s por rutas relativas en SPAs
+  let fullUrl = url;
+  if (!url.startsWith('http')) {
+    const origin = window.location.origin;
+    const path = url.startsWith('/') ? url : `/${url}`;
+    fullUrl = `${origin}${path}`;
+  }
   
   return fetch(fullUrl, {
     ...options,
