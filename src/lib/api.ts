@@ -34,6 +34,13 @@ export const api = {
     logout: () => fetchWithAuth('/api/auth/logout', { method: 'POST' }),
     
     me: (): Promise<User> => fetchWithAuth('/api/auth/me'),
+
+    googleLogin: (credential: string): Promise<User> =>
+      fetchWithAuth('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential })
+      }),
   },
   
   noticias: {

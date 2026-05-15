@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { LogIn, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
+import { GoogleLogin } from '@react-oauth/google';
 
 interface LoginProps {
   onLogin: (user: any) => void;
@@ -30,6 +31,19 @@ export default function Login({ onLogin }: LoginProps) {
     }
   };
 
+  const handleGoogleSuccess = async (response: any) => {
+    setLoading(true);
+    try {
+      const user = await api.auth.googleLogin(response.credential);
+      onLogin(user);
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError('Error al iniciar sesión con Google');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4">
       <motion.div 
@@ -43,6 +57,26 @@ export default function Login({ onLogin }: LoginProps) {
           </div>
           <h1 className="text-3xl font-serif font-bold text-gray-900">Bienvenido de nuevo</h1>
           <p className="text-gray-500 mt-2">Ingresa tus credenciales para acceder</p>
+        </div>
+
+        <div className="flex justify-center mb-8">
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={() => setError('Error al iniciar sesión con Google')}
+            useOneTap
+            theme="filled_blue"
+            shape="pill"
+            width="100%"
+          />
+        </div>
+
+        <div className="relative mb-8">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-200"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-gray-500 font-medium italic">o con tu email</span>
+          </div>
         </div>
 
         {error && (
