@@ -38,7 +38,10 @@ async function startServer() {
   const app = express();
   app.use(express.json());
   app.use(cookieParser());
-  app.use(cors());
+  app.use(cors({
+    origin: true,
+    credentials: true,
+  }));
 
   // --- Auth Middlewares ---
   const authenticateToken = (req: any, res: any, next: any) => {
@@ -85,12 +88,22 @@ async function startServer() {
     }
 
     const token = jwt.sign({ id: user.id, email: user.email, rol: user.rol, nombre: user.nombre }, JWT_SECRET, { expiresIn: '7d' });
-    res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, path: '/', sameSite: 'lax' });
+    res.cookie('token', token, { 
+      httpOnly: true, 
+      maxAge: 7 * 24 * 60 * 60 * 1000, 
+      path: '/', 
+      sameSite: 'none', 
+      secure: true 
+    });
     res.json({ id: user.id, email: user.email, nombre: user.nombre, rol: user.rol, foto_perfil: user.foto_perfil });
   });
 
   app.post('/api/auth/logout', (req, res) => {
-    res.clearCookie('token', { path: '/' });
+    res.clearCookie('token', { 
+      path: '/', 
+      sameSite: 'none', 
+      secure: true 
+    });
     res.json({ message: 'Sesión cerrada' });
   });
 

@@ -8,57 +8,64 @@ async function handleResponse(response: Response) {
   return response.json();
 }
 
+async function fetchWithAuth(url: string, options: RequestInit = {}) {
+  return fetch(url, {
+    ...options,
+    credentials: 'include',
+  }).then(handleResponse);
+}
+
 export const api = {
   auth: {
     login: (credentials: any): Promise<User> => 
-      fetch('/api/auth/login', {
+      fetchWithAuth('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials)
-      }).then(handleResponse),
+      }),
     
     register: (data: any): Promise<any> =>
-      fetch('/api/auth/registro', {
+      fetchWithAuth('/api/auth/registro', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
-      }).then(handleResponse),
+      }),
     
-    logout: () => fetch('/api/auth/logout', { method: 'POST' }).then(handleResponse),
+    logout: () => fetchWithAuth('/api/auth/logout', { method: 'POST' }),
     
-    me: (): Promise<User> => fetch('/api/auth/me').then(handleResponse),
+    me: (): Promise<User> => fetchWithAuth('/api/auth/me'),
   },
   
   noticias: {
     list: (params: any = {}): Promise<Noticia[]> => {
       const searchParams = new URLSearchParams(params);
-      return fetch(`/api/noticias?${searchParams}`).then(handleResponse);
+      return fetchWithAuth(`/api/noticias?${searchParams}`);
     },
     
-    get: (id: string): Promise<Noticia> => fetch(`/api/noticias/${id}`).then(handleResponse),
+    get: (id: string): Promise<Noticia> => fetchWithAuth(`/api/noticias/${id}`),
     
     create: (data: any): Promise<{ id: string }> =>
-      fetch('/api/noticias', {
+      fetchWithAuth('/api/noticias', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
-      }).then(handleResponse),
+      }),
   },
   
   categorias: {
-    list: (): Promise<Categoria[]> => fetch('/api/categorias').then(handleResponse),
+    list: (): Promise<Categoria[]> => fetchWithAuth('/api/categorias'),
   },
   
   metricas: {
-    get: (): Promise<Metrica[]> => fetch('/api/metricas').then(handleResponse),
+    get: (): Promise<Metrica[]> => fetchWithAuth('/api/metricas'),
   },
   
   upload: (file: File): Promise<{ url: string }> => {
     const formData = new FormData();
     formData.append('image', file);
-    return fetch('/api/upload', {
+    return fetchWithAuth('/api/upload', {
       method: 'POST',
       body: formData
-    }).then(handleResponse);
+    });
   }
 };

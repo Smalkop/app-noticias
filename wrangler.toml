@@ -1,0 +1,16 @@
+name = "noticias-py"
+pages_build_output_dir = "./dist"
+compatibility_date = "2024-12-01"
+
+[[d1_databases]]
+binding = "DB" # Este es el nombre que usarás en tu código (env.DB)
+database_name = "noticias-py-db"
+database_id = "tu-id-de-base-de-datos-aqui"
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "noticias-py-images"
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "tu-id-de-kv-aqui"
