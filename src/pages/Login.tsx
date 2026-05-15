@@ -66,7 +66,6 @@ export default function Login({ onLogin }: LoginProps) {
             useOneTap
             theme="filled_blue"
             shape="pill"
-            width="100%"
           />
         </div>
 
