@@ -61,7 +61,7 @@ app.get('/api/auth/me', async (c) => {
 
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-    const payload = await verify(token, secret);
+    const payload = await verify(token, secret, 'HS256');
     const user = await c.env.DB.prepare('SELECT id, email, nombre, rol, foto_perfil, bio FROM usuarios WHERE id = ?').bind(payload.id).first();
     return c.json(user || null);
   } catch (err) {
@@ -89,14 +89,14 @@ app.post('/api/auth/login', async (c) => {
       email: user.email, 
       rol: user.rol, 
       nombre: user.nombre 
-    }, secret);
+    }, secret, 'HS256');
     
     setCookie(c, 'token', token, {
       path: '/',
       secure: true,
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60,
-      sameSite: 'Lax',
+      sameSite: 'None',
     });
 
     return c.json({ 
@@ -223,14 +223,14 @@ app.post('/api/auth/google', async (c) => {
     }
 
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-    const token = await sign({ id: user.id, email: user.email, rol: user.rol, nombre: user.nombre }, secret);
+    const token = await sign({ id: user.id, email: user.email, rol: user.rol, nombre: user.nombre }, secret, 'HS256');
     
     setCookie(c, 'token', token, {
       path: '/',
       secure: true,
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60,
-      sameSite: 'Lax',
+      sameSite: 'None',
     });
 
     return c.json({ id: user.id, email: user.email, nombre: user.nombre, rol: user.rol, foto_perfil: user.foto_perfil });
@@ -242,7 +242,7 @@ app.post('/api/auth/google', async (c) => {
 
 // Auth: Logout
 app.post('/api/auth/logout', (c) => {
-  deleteCookie(c, 'token', { path: '/', sameSite: 'Lax', secure: true });
+  deleteCookie(c, 'token', { path: '/', sameSite: 'None', secure: true });
   return c.json({ message: 'Sesión cerrada' });
 });
 
@@ -255,7 +255,7 @@ app.post('/api/noticias', async (c) => {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
     let payload;
     try {
-      payload = await verify(token, secret);
+      payload = await verify(token, secret, 'HS256');
     } catch (e) {
       return c.json({ error: 'Sesión inválida' }, 401);
     }
@@ -402,7 +402,7 @@ app.get('/api/metricas', async (c) => {
 
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-    const payload = await verify(token, secret);
+    const payload = await verify(token, secret, 'HS256');
     
     // Usar LEFT JOIN para incluir noticias sin visitas y agrupar por campos seleccionados
     let query = `
