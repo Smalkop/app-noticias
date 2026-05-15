@@ -49,7 +49,7 @@ app.get('/api/categorias', async (c) => {
     const { results } = await c.env.DB.prepare('SELECT * FROM categorias WHERE activa = 1').all();
     return c.json(results || []);
   } catch (error: any) {
-    console.error('Categorias Error:', error);
+    console.error('Categorias Error:', error.message, error.stack);
     return c.json({ error: 'Error al obtener categorías', details: error.message }, 500);
   }
 });
@@ -253,7 +253,12 @@ app.post('/api/noticias', async (c) => {
 
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-    const payload = await verify(token, secret);
+    let payload;
+    try {
+      payload = await verify(token, secret);
+    } catch (e) {
+      return c.json({ error: 'Sesión inválida' }, 401);
+    }
     
     const body = await c.req.json();
     const { titulo, subtitulo, contenido, categoria_id, imagen_destacada, estado } = body;
@@ -264,15 +269,32 @@ app.post('/api/noticias', async (c) => {
 
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
+    const catId = parseInt(String(categoria_id));
+
+    if (isNaN(catId)) {
+      return c.json({ error: 'ID de categoría inválido' }, 400);
+    }
 
     await c.env.DB.prepare(`
       INSERT INTO noticias (id, autor_id, categoria_id, titulo, subtitulo, contenido, imagen_destacada, estado, publicado_en, creado_en, actualizado_en)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, payload.id, categoria_id, titulo, subtitulo, contenido, imagen_destacada, estado || 'borrador', estado === 'publicado' ? now : null, now, now).run();
+    `).bind(
+      id, 
+      payload.id, 
+      catId, 
+      titulo, 
+      subtitulo || '', 
+      contenido, 
+      imagen_destacada || '', 
+      estado || 'borrador', 
+      estado === 'publicado' ? now : null, 
+      now, 
+      now
+    ).run();
 
     return c.json({ id, message: 'Noticia creada correctamente' }, 201);
   } catch (error: any) {
-    console.error('Create Noticia Error:', error);
+    console.error('Create Noticia Error:', error.message, error.stack);
     return c.json({ error: 'Error al crear noticia', details: error.message }, 500);
   }
 });
@@ -382,7 +404,12 @@ app.get('/api/metricas', async (c) => {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
     const payload = await verify(token, secret);
     
-    let query = 'SELECT n.titulo, SUM(m.visitas) as total_visitas FROM metricas_visitas m JOIN noticias n ON m.noticia_id = n.id';
+    // Usar LEFT JOIN para incluir noticias sin visitas y agrupar por campos seleccionados
+    let query = `
+      SELECT n.titulo, COALESCE(SUM(m.visitas), 0) as total_visitas 
+      FROM noticias n 
+      LEFT JOIN metricas_visitas m ON n.id = m.noticia_id
+    `;
     const params: any[] = [];
     
     if (payload.rol !== 'admin') {
@@ -391,17 +418,18 @@ app.get('/api/metricas', async (c) => {
     }
     query += ' GROUP BY n.id, n.titulo ORDER BY total_visitas DESC LIMIT 5';
     
-    const { results, error: dbError } = await c.env.DB.prepare(query).bind(...params).all();
-    if (dbError) {
-      throw new Error(`D1 Error: ${dbError}`);
+    const { results } = await c.env.DB.prepare(query).bind(...params).all();
+    if (!results) {
+      console.warn('Metricas returned no results (undefined or null)');
     }
     return c.json(results || []);
   } catch (error: any) {
-    console.error('Metricas Error:', error);
+    console.error('Metricas Error:', error.message, error.stack);
     return c.json({ 
       error: 'Error al obtener métricas', 
       details: error.message,
-      stack: error.stack
+      stack: error.stack,
+      hint: 'Asegúrate de que la tabla metricas_visitas exista y tenga datos.'
     }, 500);
   }
 });

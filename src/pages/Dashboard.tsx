@@ -197,7 +197,7 @@ export default function Dashboard({ user }: DashboardProps) {
                 </div>
               </div>
 
-              <div>
+            <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Categoría</label>
                 <select 
                   required
@@ -208,6 +208,11 @@ export default function Dashboard({ user }: DashboardProps) {
                   <option value="">Seleccionar...</option>
                   {Array.isArray(categorias) && categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
+                {categorias.length === 0 && (
+                  <p className="text-xs text-red-500 mt-1">
+                    No hay categorías. <a href="/api/setup-db" target="_blank" className="underline">Haz clic aquí para inicializar la base de datos</a> y luego recarga.
+                  </p>
+                )}
               </div>
 
               <div>
