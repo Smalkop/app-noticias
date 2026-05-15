@@ -3,14 +3,19 @@ import { User, Noticia, Categoria, Metrica } from '../types';
 async function handleResponse(response: Response) {
   const contentType = response.headers.get('content-type');
   if (!response.ok) {
-    let errorMessage = 'Algo salió mal';
-    if (contentType && contentType.includes('application/json')) {
-      const error = await response.json();
-      errorMessage = error.error || errorMessage;
-    } else {
-      const text = await response.text();
-      errorMessage = `Error ${response.status}: ${text.slice(0, 100)}`;
+    let errorMessage = `Error ${response.status}`;
+    try {
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        errorMessage = error.error || error.message || errorMessage;
+      } else {
+        const text = await response.text();
+        errorMessage = `${errorMessage}: ${text.slice(0, 100)}`;
+      }
+    } catch (e) {
+      errorMessage = `${errorMessage} (cuerpo no legible)`;
     }
+    console.error(`API Error [${response.status}] ${response.url}:`, errorMessage);
     throw new Error(errorMessage);
   }
   
@@ -21,7 +26,10 @@ async function handleResponse(response: Response) {
 }
 
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
-  return fetch(url, {
+  // Asegurar que la URL sea absoluta respecto a la raíz del dominio para evitar 404s por rutas relativas
+  const fullUrl = url.startsWith('http') ? url : url.startsWith('/') ? url : `/${url}`;
+  
+  return fetch(fullUrl, {
     ...options,
     credentials: 'include',
   }).then(handleResponse);
