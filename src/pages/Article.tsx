@@ -87,7 +87,7 @@ export default function Article() {
           />
 
           <div className="prose prose-lg max-w-none prose-headings:font-serif prose-red prose-p:text-gray-700 prose-p:leading-relaxed prose-p:mb-6">
-            {noticia.contenido.split('\n').map((para, i) => (
+            {noticia.contenido?.split('\n').map((para, i) => (
               <p key={i}>{para}</p>
             ))}
           </div>

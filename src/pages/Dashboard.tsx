@@ -110,7 +110,7 @@ export default function Dashboard({ user }: DashboardProps) {
               <FileText className="w-5 h-5 text-red-600" /> Noticias más leídas
             </h3>
             <div className="space-y-6">
-              {Array.isArray(metricas) && metricas.map((m, i) => (
+              {Array.isArray(metricas) && metricas.length > 0 ? metricas.map((m, i) => (
                 <div key={i} className="flex items-center gap-4">
                   <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-400 text-xs">
                     {i + 1}
@@ -120,21 +120,22 @@ export default function Dashboard({ user }: DashboardProps) {
                     <div className="w-full bg-gray-100 h-2 rounded-full mt-2 overflow-hidden">
                       <div 
                         className="bg-red-500 h-full rounded-full" 
-                        style={{ width: `${(m.total_visitas / metricas[0].total_visitas) * 100}%` }}
+                        style={{ width: `${(m.total_visitas / (metricas[0]?.total_visitas || 1)) * 100}%` }}
                       ></div>
                     </div>
                   </div>
                   <span className="font-mono font-bold text-red-600">{m.total_visitas}</span>
                 </div>
-              ))}
-              {metricas.length === 0 && <p className="text-gray-400 italic">No hay datos de visitas aún.</p>}
+              )) : (
+                <p className="text-gray-400 italic">No hay datos de visitas aún.</p>
+              )}
             </div>
           </div>
           <div className="bg-gradient-to-br from-red-600 to-red-800 text-white p-8 rounded-2xl shadow-xl flex flex-col justify-between">
             <div>
               <h3 className="text-lg font-bold opacity-80 mb-1">Total Impacto</h3>
               <p className="text-5xl font-serif font-bold">
-                {metricas.reduce((acc, m) => acc + m.total_visitas, 0)}
+                {Array.isArray(metricas) ? metricas.reduce((acc, m) => acc + m.total_visitas, 0) : 0}
               </p>
               <p className="text-sm opacity-60 mt-2">Visitas totales acumuladas</p>
             </div>

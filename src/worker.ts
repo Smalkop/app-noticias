@@ -66,42 +66,114 @@ app.get('/api/auth/me', async (c) => {
 
 // Auth: Login
 app.post('/api/auth/login', async (c) => {
-  const { email, password } = await c.req.json();
-  const user: any = await c.env.DB.prepare('SELECT * FROM usuarios WHERE email = ?').bind(email).first();
+  try {
+    const { email, password } = await c.req.json();
+    const user: any = await c.env.DB.prepare('SELECT * FROM usuarios WHERE email = ?').bind(email).first();
 
-  if (!user || user.password_hash !== password) { // Simplificado: en producción usar hash
-    return c.json({ error: 'Credenciales inválidas' }, 401);
+    if (!user) {
+      return c.json({ error: 'Usuario no encontrado' }, 401);
+    }
+    
+    if (user.password_hash !== password) {
+      return c.json({ error: 'Contraseña incorrecta' }, 401);
+    }
+
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const token = await sign({ 
+      id: user.id, 
+      email: user.email, 
+      rol: user.rol, 
+      nombre: user.nombre 
+    }, secret);
+    
+    setCookie(c, 'token', token, {
+      path: '/',
+      secure: true,
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60,
+      sameSite: 'None',
+    });
+
+    return c.json({ 
+      id: user.id, 
+      email: user.email, 
+      nombre: user.nombre, 
+      rol: user.rol, 
+      foto_perfil: user.foto_perfil 
+    });
+  } catch (error: any) {
+    console.error('Login Error:', error);
+    return c.json({ error: 'Error al iniciar sesión', details: error.message }, 500);
   }
-
-  const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-  const token = await sign({ id: user.id, email: user.email, rol: user.rol, nombre: user.nombre }, secret);
-  
-  setCookie(c, 'token', token, {
-    path: '/',
-    secure: true,
-    httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60,
-    sameSite: 'None',
-  });
-
-  return c.json({ id: user.id, email: user.email, nombre: user.nombre, rol: user.rol, foto_perfil: user.foto_perfil });
 });
 
 // Auth: Registro
 app.post('/api/auth/registro', async (c) => {
   try {
     const { email, password, nombre } = await c.req.json();
+    if (!email || !password || !nombre) {
+      return c.json({ error: 'Faltan campos obligatorios (email, password, nombre)' }, 400);
+    }
+
     const id = crypto.randomUUID();
     
-    // El esquema actual no tiene 'activo', así que lo omitimos
+    // Insertamos según el esquema de usuarios
     await c.env.DB.prepare(
-      'INSERT INTO usuarios (id, email, password_hash, nombre, rol) VALUES (?, ?, ?, ?, ?)'
-    ).bind(id, email, password, nombre, 'autor').run();
+      'INSERT INTO usuarios (id, email, password_hash, nombre, rol, activo) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(id, email, password, nombre, 'autor', 1).run();
 
     return c.json({ id, email, nombre }, 201);
   } catch (error: any) {
     console.error('Registration Error:', error);
-    return c.json({ error: 'El email ya existe o datos inválidos', details: error.message }, 400);
+    if (error.message.includes('UNIQUE constraint failed')) {
+      return c.json({ error: 'El email ya está registrado' }, 400);
+    }
+    return c.json({ error: 'Error al registrar usuario', details: error.message }, 400);
+  }
+});
+
+// Auth: Google Login
+app.post('/api/auth/google', async (c) => {
+  try {
+    const { credential } = await c.req.json();
+    if (!credential) return c.json({ error: 'No se recibió la credencial de Google' }, 400);
+
+    // En un Worker, para verificar el token de Google sin librerías pesadas:
+    // podemos usar la API de Google: https://oauth2.googleapis.com/tokeninfo?id_token=XYZ
+    const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`);
+    if (!response.ok) return c.json({ error: 'Token de Google inválido' }, 401);
+    
+    const payload: any = await response.json();
+    const { email, name, picture, sub: google_id } = payload;
+
+    // Verificar si el usuario existe
+    let user: any = await c.env.DB.prepare('SELECT * FROM usuarios WHERE email = ?').bind(email).first();
+
+    if (!user) {
+      // Crear usuario si no existe
+      const id = crypto.randomUUID();
+      await c.env.DB.prepare(
+        'INSERT INTO usuarios (id, email, password_hash, nombre, foto_perfil, rol, activo) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(id, email, 'google-auth-' + google_id, name, picture, 'autor', 1).run();
+      
+      user = await c.env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first();
+    }
+
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const token = await sign({ id: user.id, email: user.email, rol: user.rol, nombre: user.nombre }, secret);
+    
+    setCookie(c, 'token', token, {
+      path: '/',
+      secure: true,
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60,
+      sameSite: 'None',
+    });
+
+    return c.json({ id: user.id, email: user.email, nombre: user.nombre, rol: user.rol, foto_perfil: user.foto_perfil });
+  } catch (error: any) {
+    console.error('Google Auth Error:', error);
+    return c.json({ error: 'Error en autenticación con Google', details: error.message }, 500);
   }
 });
 
