@@ -30,10 +30,15 @@ app.use('*', cors({
 // Error handling
 app.onError((err, c) => {
   console.error(err);
-  return c.json({ error: 'Error interno del servidor', message: err.message }, 500);
+  return c.json({ error: 'Error interno del servidor', message: err.message, name: err.name }, 500);
 });
 
-// --- API ROUTES ---
+app.use('/api/*', async (c, next) => {
+  if (!c.env.DB) {
+    return c.json({ error: 'Configuración de base de datos no encontrada (DB binding missing)' }, 500);
+  }
+  await next();
+});
 
 // Health check
 app.get('/api/health', (c) => c.json({ status: 'ok' }));
@@ -241,6 +246,37 @@ app.post('/api/auth/logout', (c) => {
   return c.json({ message: 'Sesión cerrada' });
 });
 
+// Noticias: Create
+app.post('/api/noticias', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret);
+    
+    const body = await c.req.json();
+    const { titulo, subtitulo, contenido, categoria_id, imagen_destacada, estado } = body;
+
+    if (!titulo || !contenido || !categoria_id) {
+      return c.json({ error: 'Faltan campos obligatorios (titulo, contenido, categoria_id)' }, 400);
+    }
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    await c.env.DB.prepare(`
+      INSERT INTO noticias (id, autor_id, categoria_id, titulo, subtitulo, contenido, imagen_destacada, estado, publicado_en, creado_en, actualizado_en)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, payload.id, categoria_id, titulo, subtitulo, contenido, imagen_destacada, estado || 'borrador', estado === 'publicado' ? now : null, now, now).run();
+
+    return c.json({ id, message: 'Noticia creada correctamente' }, 201);
+  } catch (error: any) {
+    console.error('Create Noticia Error:', error);
+    return c.json({ error: 'Error al crear noticia', details: error.message }, 500);
+  }
+});
+
 // Noticias: List
 app.get('/api/noticias', async (c) => {
   try {
@@ -353,13 +389,20 @@ app.get('/api/metricas', async (c) => {
       query += ' WHERE n.autor_id = ?';
       params.push(payload.id);
     }
-    query += ' GROUP BY n.id ORDER BY total_visitas DESC LIMIT 5';
+    query += ' GROUP BY n.id, n.titulo ORDER BY total_visitas DESC LIMIT 5';
     
-    const { results } = await c.env.DB.prepare(query).bind(...params).all();
+    const { results, error: dbError } = await c.env.DB.prepare(query).bind(...params).all();
+    if (dbError) {
+      throw new Error(`D1 Error: ${dbError}`);
+    }
     return c.json(results || []);
   } catch (error: any) {
     console.error('Metricas Error:', error);
-    return c.json({ error: 'Error al obtener métricas', details: error.message }, 500);
+    return c.json({ 
+      error: 'Error al obtener métricas', 
+      details: error.message,
+      stack: error.stack
+    }, 500);
   }
 });
 

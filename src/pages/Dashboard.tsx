@@ -25,15 +25,28 @@ export default function Dashboard({ user }: DashboardProps) {
 
   useEffect(() => {
     async function loadData() {
+      setLoading(true);
       try {
-        const [m, c] = await Promise.all([
+        const [mResults, cResults] = await Promise.allSettled([
           api.metricas.get(),
           api.categorias.list()
         ]);
-        setMetricas(m);
-        setCategorias(c);
+        
+        if (mResults.status === 'fulfilled') {
+          setMetricas(mResults.value);
+        } else {
+          console.error('Error loading metrics:', mResults.reason);
+          // Opcional: mostrar un mensaje en el UI si es crítico
+        }
+        
+        if (cResults.status === 'fulfilled') {
+          setCategorias(cResults.value);
+        } else {
+          console.error('Error loading categories:', cResults.reason);
+          alert('Error al cargar las categorías. Por favor, asegúrate de que la base de datos esté inicializada.');
+        }
       } catch (error) {
-        console.error(error);
+        console.error('Unexpected error loading dashboard data:', error);
       } finally {
         setLoading(false);
       }
