@@ -176,15 +176,31 @@ app.post('/api/auth/solicitar-autor', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const motivo = body.motivo || '';
 
-    await c.env.DB.prepare(
-      'INSERT INTO solicitudes_autor (usuario_id, motivo) VALUES (?, ?)'
-    ).bind(payload.id, motivo).run();
+    // Check for existing request
+    const existing: any = await c.env.DB.prepare('SELECT id, estado FROM solicitudes_autor WHERE usuario_id = ?').bind(payload.id).first();
+    
+    if (existing) {
+      if (existing.estado === 'pendiente') {
+        return c.json({ error: 'Ya tienes una solicitud pendiente' }, 400);
+      }
+      if (existing.estado === 'aprobado') {
+        return c.json({ error: 'Ya eres un autor verificado' }, 400);
+      }
+      
+      // If rejected, update the existing request to pending again
+      await c.env.DB.prepare(
+        'UPDATE solicitudes_autor SET motivo = ?, estado = "pendiente", creado_en = CURRENT_TIMESTAMP WHERE usuario_id = ?'
+      ).bind(motivo, payload.id).run();
+    } else {
+      // Create new request
+      await c.env.DB.prepare(
+        'INSERT INTO solicitudes_autor (usuario_id, motivo) VALUES (?, ?)'
+      ).bind(payload.id, motivo).run();
+    }
 
     return c.json({ message: 'Solicitud enviada correctamente' });
   } catch (error: any) {
-    if (error.message.includes('UNIQUE constraint failed')) {
-      return c.json({ error: 'Ya tienes una solicitud pendiente' }, 400);
-    }
+    console.error('Solicitar Autor Error:', error);
     return c.json({ error: 'Error al enviar solicitud', details: error.message }, 500);
   }
 });
