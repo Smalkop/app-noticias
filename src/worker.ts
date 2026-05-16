@@ -52,7 +52,7 @@ app.onError((err, c) => {
 });
 
 // Helper for SendPulse
-async function addToSendPulse(c: any, email: string, nombre: string) {
+async function addToSendPulse(c: any, email: string, nombre: string, phone?: string) {
   const spId = c.env['id sendpulse'];
   const spSecret = c.env['secret sendpulse'];
   const spListId = c.env.SENDPULSE_LIST_ID;
@@ -63,7 +63,6 @@ async function addToSendPulse(c: any, email: string, nombre: string) {
   }
 
   try {
-    // 1. Get Token
     const authRes = await fetch('https://api.sendpulse.com/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -77,7 +76,12 @@ async function addToSendPulse(c: any, email: string, nombre: string) {
     if (!authRes.ok) throw new Error('SendPulse auth failed');
     const { access_token } = await authRes.json() as any;
 
-    // 2. Add email to list
+    const emailData: any = {
+      email,
+      variables: { 'Nombre': nombre }
+    };
+    if (phone) emailData.phone = phone;
+
     await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
       method: 'POST',
       headers: {
@@ -85,17 +89,36 @@ async function addToSendPulse(c: any, email: string, nombre: string) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        emails: [
-          {
-            email,
-            variables: { 'Nombre': nombre }
-          }
-        ]
+        emails: [emailData],
+        confirmation: 1 // Trigger verification email if list allows it
       })
     });
   } catch (error) {
     console.error('SendPulse Error:', error);
   }
+}
+
+// Helper to remove from SendPulse
+async function removeFromSendPulse(c: any, email: string) {
+  const spId = c.env['id sendpulse'];
+  const spSecret = c.env['secret sendpulse'];
+  const spListId = c.env.SENDPULSE_LIST_ID;
+  if (!spId || !spSecret || !spListId) return;
+
+  try {
+    const authRes = await fetch('https://api.sendpulse.com/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grant_type: 'client_credentials', client_id: spId, client_secret: spSecret })
+    });
+    const { access_token } = await authRes.json() as any;
+
+    await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emails: [email] })
+    });
+  } catch (err) { console.error('SendPulse Delete Error:', err); }
 }
 
 app.use('/api/*', async (c, next) => {
@@ -127,7 +150,7 @@ app.get('/api/auth/me', async (c) => {
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
     const payload = await verify(token, secret, 'HS256');
-    const user: any = await c.env.DB.prepare('SELECT id, email, nombre, rol, foto_perfil, bio FROM usuarios WHERE id = ?').bind(payload.id).first();
+    const user: any = await c.env.DB.prepare('SELECT id, email, nombre, rol, foto_perfil, bio, verificado, telefono FROM usuarios WHERE id = ?').bind(payload.id).first();
     // Special check for the admin email to ensure role is updated if needed
     if (user && user.email === 'brahiangonzalez300@gmail.com' && user.rol !== 'admin') {
       await c.env.DB.prepare('UPDATE usuarios SET rol = "admin" WHERE id = ?').bind(user.id).run();
@@ -196,13 +219,13 @@ app.post('/api/auth/registro', async (c) => {
     const rol = email === 'brahiangonzalez300@gmail.com' ? 'admin' : 'suscriptor';
     
     await c.env.DB.prepare(
-      'INSERT INTO usuarios (id, email, password_hash, nombre, rol) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO usuarios (id, email, password_hash, nombre, rol, verificado) VALUES (?, ?, ?, ?, ?, 0)'
     ).bind(id, email, password, nombre, rol).run();
 
     // Add to SendPulse in background
     c.executionCtx.waitUntil(addToSendPulse(c, email, nombre));
 
-    return c.json({ id, email, nombre, rol }, 201);
+    return c.json({ id, email, nombre, rol, verificado: 0 }, 201);
   } catch (error: any) {
     console.error('Registration Error:', error);
     if (error.message.includes('UNIQUE constraint failed')) {
@@ -460,6 +483,97 @@ app.post('/api/notificaciones/leer', async (c) => {
   }
 });
 
+// Update Profile mapping
+app.post('/api/usuario/perfil', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  try {
+    const { nombre, bio, foto_perfil, telefono } = await c.req.json();
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+
+    await c.env.DB.prepare(`
+      UPDATE usuarios 
+      SET nombre = COALESCE(?, nombre), 
+          bio = COALESCE(?, bio), 
+          foto_perfil = COALESCE(?, foto_perfil),
+          telefono = COALESCE(?, telefono)
+      WHERE id = ?
+    `).bind(nombre, bio, foto_perfil, telefono, payload.id).run();
+
+    // If telefono was updated, sync with SendPulse
+    if (telefono) {
+      const user: any = await c.env.DB.prepare('SELECT email, nombre FROM usuarios WHERE id = ?').bind(payload.id).first();
+      if (user) {
+        c.executionCtx.waitUntil(addToSendPulse(c, user.email, user.nombre, telefono));
+      }
+    }
+
+    return c.json({ message: 'Perfil actualizado' });
+  } catch (error: any) {
+    return c.json({ error: 'Error al actualizar perfil' }, 500);
+  }
+});
+
+// Webhook for SendPulse Verification
+// Usually configured in SendPulse: Events -> Add Event -> "Subscription Confirmed"
+app.post('/api/webhook/sendpulse', async (c) => {
+  try {
+    const body = await c.req.json();
+    // SendPulse webhooks often send an array or custom format
+    // This is a simplified handler based on typical webhook patterns
+    const events = Array.isArray(body) ? body : [body];
+    
+    for (const event of events) {
+      if (event.email) {
+        await c.env.DB.prepare('UPDATE usuarios SET verificado = 1 WHERE email = ?')
+          .bind(event.email).run();
+      }
+    }
+    return c.json({ ok: true });
+  } catch (err) {
+    return c.json({ ok: false }, 500);
+  }
+});
+
+// Admin: Cleanup unverified users (>24h)
+app.post('/api/admin/limpiar-usuarios', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    // 1. Find users to delete
+    const { results } = await c.env.DB.prepare(`
+      SELECT email FROM usuarios 
+      WHERE verificado = 0 
+      AND creado_en < datetime('now', '-1 day')
+    `).all();
+
+    if (results && results.length > 0) {
+      for (const row of results) {
+        // 2. Remove from SendPulse
+        c.executionCtx.waitUntil(removeFromSendPulse(c, row.email as string));
+      }
+
+      // 3. Delete from DB
+      await c.env.DB.prepare(`
+        DELETE FROM usuarios 
+        WHERE verificado = 0 
+        AND creado_en < datetime('now', '-1 day')
+      `).run();
+    }
+
+    return c.json({ deleted: results?.length || 0 });
+  } catch (err) {
+    return c.json({ error: 'Error en limpieza' }, 500);
+  }
+});
+
 // Setup: Inicializar Database (Ruta temporal de utilidad)
 app.get('/api/setup-db', async (c) => {
   try {
@@ -620,6 +734,12 @@ app.get('/api/admin/migrar-db', async (c) => {
         FOREIGN KEY (noticia_id) REFERENCES noticias(id)
       );
     `).catch(() => console.log('Tablas ya existen'));
+
+    // User verification and phone migration
+    await c.env.DB.exec(`
+      ALTER TABLE usuarios ADD COLUMN verificado INTEGER DEFAULT 0;
+      ALTER TABLE usuarios ADD COLUMN telefono TEXT;
+    `).catch(() => console.log('Columnas usuario verification ya existen'));
 
     return c.json({ message: 'Migración completada' });
   } catch (error: any) {

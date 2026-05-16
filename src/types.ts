@@ -5,6 +5,8 @@ export interface User {
   rol: 'suscriptor' | 'autor' | 'admin';
   foto_perfil?: string;
   bio?: string;
+  verificado: number;
+  telefono?: string;
 }
 
 export interface Categoria {

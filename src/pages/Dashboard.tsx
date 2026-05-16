@@ -56,6 +56,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   // Form state for Profile
   const [nombre, setNombre] = useState(user.nombre);
   const [bio, setBio] = useState(user.bio || '');
+  const [telefono, setTelefono] = useState(user.telefono || '');
   const [perfilUrl, setPerfilUrl] = useState(user.foto_perfil || '');
   
   // Author Request state
@@ -218,7 +219,8 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
       await api.auth.updatePerfil({
         nombre,
         bio,
-        foto_perfil: perfilUrl
+        foto_perfil: perfilUrl,
+        telefono
       });
       
       // Actualizar el estado global del usuario
@@ -881,8 +883,29 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
             {activeTab === 'profile' && (
               <div className="max-w-2xl mx-auto space-y-8">
+                {!user.verificado && (
+                  <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl flex items-start gap-4">
+                    <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
+                    <div>
+                      <h4 className="font-bold text-amber-900">Correo no verificado</h4>
+                      <p className="text-sm text-amber-700">Por favor, revisa tu correo electrónico y verifica tu cuenta. Las cuentas no verificadas serán eliminadas después de 24 horas.</p>
+                    </div>
+                  </div>
+                )}
+
                 <form onSubmit={handleProfileSubmit} className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm space-y-6">
-                  <h3 className="text-xl font-bold mb-6">Mi Perfil</h3>
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-bold">Mi Perfil</h3>
+                    {user.verificado ? (
+                      <span className="flex items-center gap-1 text-[10px] font-black uppercase text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                        <CheckCircle className="w-3 h-3" /> Verificado
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-[10px] font-black uppercase text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
+                        <Clock className="w-3 h-3" /> Pendiente
+                      </span>
+                    )}
+                  </div>
                   
                   {success && (
                     <div className="bg-green-50 text-green-700 p-4 rounded-lg font-bold text-center border border-green-100">
@@ -916,6 +939,17 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                       required
                       value={nombre}
                       onChange={(e) => setNombre(e.target.value)}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Teléfono (Opcional)</label>
+                    <input 
+                      type="tel" 
+                      placeholder="+595 9xx xxx xxx"
+                      value={telefono}
+                      onChange={(e) => setTelefono(e.target.value)}
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none"
                     />
                   </div>
