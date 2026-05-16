@@ -58,7 +58,7 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
   const spListId = c.env.SENDPULSE_LIST_ID;
   
   if (!spId || !spSecret || !spListId) {
-    console.warn('SendPulse credentials missing');
+    console.error('SendPulse Error: Missing credentials or list ID', { hasId: !!spId, hasSecret: !!spSecret, hasListId: !!spListId });
     return;
   }
 
@@ -73,16 +73,23 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
       })
     });
     
-    if (!authRes.ok) throw new Error('SendPulse auth failed');
+    if (!authRes.ok) {
+      const errText = await authRes.text();
+      throw new Error(`SendPulse auth failed: ${authRes.status} ${errText}`);
+    }
+    
     const { access_token } = await authRes.json() as any;
 
     const emailData: any = {
       email,
-      variables: { 'Nombre': nombre }
+      variables: { 
+        'name': nombre,
+        'Nombre': nombre 
+      }
     };
-    if (phone) emailData.phone = phone;
+    if (phone) emailData.variables.phone = phone;
 
-    await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
+    const spRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${access_token}`,
@@ -90,11 +97,18 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
       },
       body: JSON.stringify({
         emails: [emailData],
-        confirmation: 1 // Trigger verification email if list allows it
+        confirmation: 1 // Trigger verification email
       })
     });
+
+    if (!spRes.ok) {
+      const errText = await spRes.text();
+      console.error(`SendPulse Add Email Error: ${spRes.status}`, errText);
+    } else {
+      console.log(`SendPulse: Usuario ${email} enviado con éxito a la lista ${spListId}`);
+    }
   } catch (error) {
-    console.error('SendPulse Error:', error);
+    console.error('SendPulse Exception:', error);
   }
 }
 
@@ -517,23 +531,34 @@ app.post('/api/usuario/perfil', async (c) => {
 });
 
 // Webhook for SendPulse Verification
-// Usually configured in SendPulse: Events -> Add Event -> "Subscription Confirmed"
 app.post('/api/webhook/sendpulse', async (c) => {
   try {
-    const body = await c.req.json();
-    // SendPulse webhooks often send an array or custom format
-    // This is a simplified handler based on typical webhook patterns
+    let body: any;
+    const contentType = c.req.header('content-type') || '';
+    
+    if (contentType.includes('application/json')) {
+      body = await c.req.json();
+    } else {
+      // Handle URL encoded or form data
+      body = await c.req.parseBody();
+    }
+
+    console.log('SendPulse Webhook Received:', JSON.stringify(body));
+    
     const events = Array.isArray(body) ? body : [body];
     
     for (const event of events) {
-      if (event.email) {
+      const email = event.email || event[0]?.email; // Some webhooks nested
+      if (email) {
         await c.env.DB.prepare('UPDATE usuarios SET verificado = 1 WHERE email = ?')
-          .bind(event.email).run();
+          .bind(email).run();
+        console.log(`Usuario verificado vía webhook: ${email}`);
       }
     }
     return c.json({ ok: true });
-  } catch (err) {
-    return c.json({ ok: false }, 500);
+  } catch (err: any) {
+    console.error('Webhook Error:', err.message);
+    return c.json({ ok: false, error: err.message }, 500);
   }
 });
 
@@ -989,6 +1014,75 @@ app.get('/api/admin/fix-cascades', async (c) => {
     await c.env.DB.exec('PRAGMA foreign_keys = ON;');
 
     return c.json({ message: 'Foreign Keys actualizadas con CASCADE' });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// Admin: Test SendPulse
+app.get('/api/admin/test-sendpulse', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    const email = payload.email; // Test with current admin email
+    const spId = c.env['id sendpulse'];
+    const spSecret = c.env['secret sendpulse'];
+    const spListId = c.env.SENDPULSE_LIST_ID;
+
+    if (!spId || !spSecret || !spListId) {
+      return c.json({ 
+        error: 'Credenciales faltantes', 
+        details: { hasId: !!spId, hasSecret: !!spSecret, hasListId: !!spListId } 
+      }, 400);
+    }
+
+    // Attempt auth
+    const authRes = await fetch('https://api.sendpulse.com/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grant_type: 'client_credentials', client_id: spId, client_secret: spSecret })
+    });
+
+    if (!authRes.ok) {
+      const text = await authRes.text();
+      return c.json({ error: 'Error de autenticación SendPulse', details: text, status: authRes.status }, 500);
+    }
+
+    const { access_token } = await authRes.json() as any;
+
+    // Check list
+    const listRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}`, {
+      headers: { 'Authorization': `Bearer ${access_token}` }
+    });
+
+    if (!listRes.ok) {
+      const text = await listRes.text();
+      return c.json({ error: 'Error al obtener la lista', details: text, status: listRes.status }, 500);
+    }
+
+    const listInfo = await listRes.json();
+
+    // Try adding test email
+    const addRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emails: [{ email, variables: { 'Nombre': 'Admin Test' } }],
+        confirmation: 1
+      })
+    });
+
+    const addResult = await addRes.json();
+
+    return c.json({ 
+      message: 'Prueba de SendPulse completada', 
+      list: listInfo,
+      addResult
+    });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }

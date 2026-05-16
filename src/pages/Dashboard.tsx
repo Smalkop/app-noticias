@@ -1277,6 +1277,23 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                   <button 
                     onClick={async () => {
                       try {
+                        const res = await fetch('/api/admin/test-sendpulse');
+                        const data: any = await res.json();
+                        if (res.ok) {
+                          alert(`Éxito: ${data.message}\nLista: ${data.list?.name || 'ID ' + data.list?.id}\nResultado: ${JSON.stringify(data.addResult)}`);
+                        } else {
+                          alert(`Error: ${data.error}\nDetalles: ${data.details || ''}`);
+                        }
+                      } catch (e) { alert('Error al probar SendPulse'); }
+                    }}
+                    className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 transition-all flex items-center gap-2"
+                  >
+                    <Bell className="w-5 h-5" /> Probar SendPulse
+                  </button>
+
+                  <button 
+                    onClick={async () => {
+                      try {
                         const res = await fetch('/api/admin/migrar-db');
                         const data: any = await res.json();
                         alert(data.message || 'Migración completada');
