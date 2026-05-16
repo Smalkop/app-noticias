@@ -47,10 +47,12 @@ app.use('*', async (c, next) => {
 
 // Error handling
 app.onError((err, c) => {
-  console.error(err);
-  // Do not expose internal error details to the client in production
-  const message = process.env.NODE_ENV === 'development' ? err.message : 'Ocurrió un error inesperado';
-  return c.json({ error: 'Error interno del servidor', message }, 500);
+  console.error('App Error:', err);
+  return c.json({ 
+    error: 'Error interno del servidor', 
+    message: err.message,
+    stack: err.stack 
+  }, 500);
 });
 
 // Sanitization helper to prevent XSS
@@ -187,7 +189,9 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
     };
     if (phone) {
       emailData.variables.phone = phone;
+      emailData.variables.Phone = phone; // Common standard
       emailData.variables['Teléfono'] = phone;
+      emailData.variables['Telefono'] = phone; // No accent safety
     }
 
     // 3. Enviar a la lista con la estructura exacta de la documentación
@@ -207,6 +211,13 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
     });
 
     const result = await spRes.json() as any;
+    
+    // Log to D1 for debugging
+    try {
+      await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
+        .bind(`SendPulse API [${email}] (Phone: ${phone}): ` + JSON.stringify(result)).run();
+    } catch(e) {}
+
     if (!spRes.ok) {
       console.error('SendPulse API Error:', result);
       return { success: false, error: result.message || 'Error desconocido API', details: result };
@@ -717,8 +728,16 @@ app.get('/api/admin/webhook-logs', async (c) => {
     const payload = await verify(token, secret, 'HS256') as any;
     if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
 
-    const logs: any = await c.env.DB.prepare('SELECT * FROM webhook_logs ORDER BY creado_en DESC LIMIT 50').all();
-    return c.json(logs.results || []);
+    // Safety check for table existence
+    try {
+      const logs: any = await c.env.DB.prepare('SELECT * FROM webhook_logs ORDER BY creado_en DESC LIMIT 50').all();
+      return c.json(logs.results || []);
+    } catch (e: any) {
+      if (e.message.includes('no such table')) {
+        return c.json([{ id: 0, payload: 'La tabla webhook_logs aún no existe. Ejecuta Configurar/Migrar DB.', creado_en: new Date().toISOString() }]);
+      }
+      throw e;
+    }
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -999,6 +1018,15 @@ app.get('/api/admin/migrar-db', async (c) => {
       ALTER TABLE usuarios ADD COLUMN verificado INTEGER DEFAULT 0;
       ALTER TABLE usuarios ADD COLUMN telefono TEXT;
     `).catch(() => console.log('Columnas usuario verification ya existen'));
+
+    // Webhook logs table if missing
+    await c.env.DB.exec(`
+      CREATE TABLE IF NOT EXISTS webhook_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        payload TEXT,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).catch(() => console.log('Tabla webhook_logs ya existe'));
 
     return c.json({ message: 'Migración completada' });
   } catch (error: any) {
