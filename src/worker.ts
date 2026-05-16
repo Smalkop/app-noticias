@@ -9,8 +9,8 @@ type Bindings = {
   IMAGES: R2Bucket;
   ASSETS: { fetch: typeof fetch };
   JWT_SECRET: string;
-  SENDPULSE_ID: string;
-  SENDPULSE_SECRET: string;
+  'id sendpulse': string;
+  'secret sendpulse': string;
   SENDPULSE_LIST_ID: string;
 };
 
@@ -38,8 +38,11 @@ app.onError((err, c) => {
 
 // Helper for SendPulse
 async function addToSendPulse(c: any, email: string, nombre: string) {
-  const { SENDPULSE_ID, SENDPULSE_SECRET, SENDPULSE_LIST_ID } = c.env;
-  if (!SENDPULSE_ID || !SENDPULSE_SECRET || !SENDPULSE_LIST_ID) {
+  const spId = c.env['id sendpulse'];
+  const spSecret = c.env['secret sendpulse'];
+  const spListId = c.env.SENDPULSE_LIST_ID;
+  
+  if (!spId || !spSecret || !spListId) {
     console.warn('SendPulse credentials missing');
     return;
   }
@@ -51,8 +54,8 @@ async function addToSendPulse(c: any, email: string, nombre: string) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         grant_type: 'client_credentials',
-        client_id: SENDPULSE_ID,
-        client_secret: SENDPULSE_SECRET
+        client_id: spId,
+        client_secret: spSecret
       })
     });
     
