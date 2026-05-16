@@ -381,12 +381,23 @@ app.put('/api/auth/perfil', async (c) => {
 
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-    const payload = await verify(token, secret, 'HS256');
-    const { nombre, bio, foto_perfil } = await c.req.json();
+    const payload = await verify(token, secret, 'HS256') as any;
+    const { nombre, bio, foto_perfil, telefono } = await c.req.json();
 
-    await c.env.DB.prepare(
-      'UPDATE usuarios SET nombre = ?, bio = ?, foto_perfil = ? WHERE id = ?'
-    ).bind(nombre, bio, foto_perfil, payload.id).run();
+    await c.env.DB.prepare(`
+      UPDATE usuarios 
+      SET nombre = ?, 
+          bio = ?, 
+          foto_perfil = ?,
+          telefono = ?
+      WHERE id = ?
+    `).bind(nombre, bio, foto_perfil, telefono, payload.id).run();
+
+    // Sync with SendPulse
+    const user: any = await c.env.DB.prepare('SELECT email, nombre, telefono FROM usuarios WHERE id = ?').bind(payload.id).first();
+    if (user) {
+      c.executionCtx.waitUntil(addToSendPulse(c, user.email, user.nombre, user.telefono));
+    }
 
     return c.json({ message: 'Perfil actualizado' });
   } catch (error: any) {
@@ -622,36 +633,7 @@ app.post('/api/notificaciones/leer', async (c) => {
   }
 });
 
-// Update Profile mapping
-app.post('/api/usuario/perfil', async (c) => {
-  const token = getCookie(c, 'token');
-  if (!token) return c.json({ error: 'No autorizado' }, 401);
-
-  try {
-    const { nombre, bio, foto_perfil, telefono } = await c.req.json();
-    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-    const payload = await verify(token, secret, 'HS256');
-
-    await c.env.DB.prepare(`
-      UPDATE usuarios 
-      SET nombre = COALESCE(?, nombre), 
-          bio = COALESCE(?, bio), 
-          foto_perfil = COALESCE(?, foto_perfil),
-          telefono = COALESCE(?, telefono)
-      WHERE id = ?
-    `).bind(nombre, bio, foto_perfil, telefono, payload.id).run();
-
-    // Sync with SendPulse (always sync if we have the user)
-    const user: any = await c.env.DB.prepare('SELECT email, nombre, telefono FROM usuarios WHERE id = ?').bind(payload.id).first();
-    if (user) {
-      c.executionCtx.waitUntil(addToSendPulse(c, user.email, user.nombre, user.telefono));
-    }
-
-    return c.json({ message: 'Perfil actualizado' });
-  } catch (error: any) {
-    return c.json({ error: 'Error al actualizar perfil' }, 500);
-  }
-});
+// Redundant endpoint removed
 
 // Webhook for SendPulse Verification
 app.post('/api/webhook/sendpulse', async (c) => {
@@ -861,6 +843,8 @@ app.get('/api/setup-db', async (c) => {
         rol TEXT DEFAULT 'suscriptor',
         foto_perfil TEXT,
         bio TEXT,
+        verificado INTEGER DEFAULT 0,
+        telefono TEXT,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
       )`),
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS solicitudes_autor (

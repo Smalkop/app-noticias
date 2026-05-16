@@ -66,6 +66,14 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   const [telefono, setTelefono] = useState(user.telefono || '');
   const [perfilUrl, setPerfilUrl] = useState(user.foto_perfil || '');
   
+  // Sincronizar estado local cuando cambia el usuario (ej: después de refreshUser o onUserUpdate)
+  useEffect(() => {
+    setNombre(user.nombre);
+    setBio(user.bio || '');
+    setTelefono(user.telefono || '');
+    setPerfilUrl(user.foto_perfil || '');
+  }, [user]);
+
   // Author Request state
   const [motivo, setMotivo] = useState('');
   const [requestSent, setRequestSent] = useState(false);
@@ -243,7 +251,8 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
         ...user,
         nombre,
         bio,
-        foto_perfil: perfilUrl
+        foto_perfil: perfilUrl,
+        telefono
       });
       
       setSuccess('¡Perfil actualizado correctamente!');
