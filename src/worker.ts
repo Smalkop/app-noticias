@@ -1106,18 +1106,35 @@ app.get('/api/admin/test-sendpulse', async (c) => {
 
     const listInfo = await listRes.json();
 
+    // Check if current user is already in list
+    const checkRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails/${encodeURIComponent(email)}`, {
+      headers: { 'Authorization': `Bearer ${access_token}` }
+    });
+    const checkUser = checkRes.ok ? await checkRes.json() : { error: 'Not found or fail', status: checkRes.status };
+
     // Try adding test email with multiple strategies
     const strategies = [
       { name: 'Simple (Email only)', body: { emails: [email] } },
       { name: 'With Template ID (Provided)', body: { emails: [email], confirmation: "44146dba-5aa2-4639-9198-d716abf985d8" } },
-      { name: 'Simple "1" DOI', body: { emails: [email], confirmation: "1" } },
-      { name: 'With Variables & Template', body: { emails: [{ email, variables: { 'Nombre': 'Admin Test', 'name': 'Admin Test' } }], confirmation: "44146dba-5aa2-4639-9198-d716abf985d8" } }
+      { name: 'Transactional SMTP API', type: 'smtp', body: { 
+          email: {
+            subject: "Prueba de Verificación",
+            template: { id: "44146dba-5aa2-4639-9198-d716abf985d8", variables: { "Nombre": "Admin Test" } },
+            from: { name: "Noticias PY", email: email }, // Usually needs to be a verified sender
+            to: [{ name: "Admin Test", email: email }]
+          }
+        } 
+      }
     ];
 
     const results = [];
     for (const strategy of strategies) {
       try {
-        const res = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
+        const url = strategy.type === 'smtp' 
+          ? 'https://api.sendpulse.com/smtp/emails' 
+          : `https://api.sendpulse.com/addressbooks/${spListId}/emails`;
+          
+        const res = await fetch(url, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(strategy.body)
@@ -1130,8 +1147,9 @@ app.get('/api/admin/test-sendpulse', async (c) => {
     }
 
     return c.json({ 
-      message: 'Pruebas de estrategias de SendPulse completadas', 
+      message: 'Diagnóstico avanzado completado', 
       list: listInfo,
+      currentUserStatus: checkUser,
       results
     });
   } catch (err: any) {

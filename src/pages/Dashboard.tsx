@@ -1302,7 +1302,9 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                         const res = await fetch('/api/admin/test-sendpulse');
                         const data: any = await res.json();
                         if (res.ok) {
-                          let summary = `Resultados del Diagnóstico:\nLista: ${data.list?.name || 'N/A'}\n\n`;
+                          let summary = `Resultados del Diagnóstico:\nLista: ${data.list?.name || 'N/A'}\n`;
+                          summary += `Usuario actual en lista: ${data.currentUserStatus?.email ? 'EXISTE ✅' : 'NO EXISTE ❌'} (${data.currentUserStatus?.status === 1 ? 'Confirmado' : 'Pendiente'})\n\n`;
+                          
                           data.results.forEach((r: any) => {
                             summary += `ST: ${r.strategy}\nStatus: ${r.status} ${r.ok ? '✅' : '❌'}\nRes: ${JSON.stringify(r.data)}\n\n`;
                           });
