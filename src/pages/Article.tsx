@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { Noticia } from '../types';
+import { Noticia, User } from '../types';
 import { Clock, User as UserIcon, ChevronLeft, Share2, Facebook, Twitter, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export default function Article() {
+interface ArticleProps {
+  user: User | null;
+}
+
+export default function Article({ user }: ArticleProps) {
   const { id } = useParams<{ id: string }>();
   const [noticia, setNoticia] = useState<Noticia | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,9 +24,11 @@ export default function Article() {
         const data = await api.noticias.get(id);
         setNoticia(data);
         
-        // Check following status
-        const { siguiendo } = await api.seguidores.getStatus(data.autor_id);
-        setSiguiendo(siguiendo);
+        // Check following status only if logged in
+        if (user) {
+          const { siguiendo } = await api.seguidores.getStatus(data.autor_id);
+          setSiguiendo(siguiendo);
+        }
       } catch (error) {
         console.error(error);
       } finally {
@@ -31,10 +37,12 @@ export default function Article() {
     }
     loadNoticia();
     window.scrollTo(0, 0);
-  }, [id]);
+  }, [id, user]);
 
   const handleFollow = async () => {
-    if (!noticia) return;
+    if (!noticia || !user) return;
+    if (user.id === noticia.autor_id) return; // Client-side guard
+
     try {
       if (siguiendo) {
         await api.seguidores.unfollow(noticia.autor_id);
@@ -74,6 +82,9 @@ export default function Article() {
     minute: '2-digit'
   });
 
+  const isOwnArticle = user?.id === noticia.autor_id;
+  const shouldShowFollowButton = user && !isOwnArticle && !siguiendo;
+
   return (
     <article className="max-w-7xl mx-auto px-4 py-8 md:py-12">
       <div className="flex flex-col md:flex-row gap-12">
@@ -111,10 +122,10 @@ export default function Article() {
                 <span>Publicado el {date}</span>
               </div>
               <div className="flex items-center gap-4 ml-auto">
-                 <button onClick={() => handleShare('fb')} className="p-2 hover:bg-blue-50 rounded-full text-blue-600 transition-colors"><Facebook className="w-5 h-5"/></button>
-                 <button onClick={() => handleShare('tw')} className="p-2 hover:bg-sky-50 rounded-full text-sky-500 transition-colors"><Twitter className="w-5 h-5"/></button>
+                 <button onClick={() => handleShare('fb')} className="p-2 hover:bg-blue-50 rounded-full text-blue-600 transition-colors" title="Compartir en Facebook"><Facebook className="w-5 h-5"/></button>
+                 <button onClick={() => handleShare('tw')} className="p-2 hover:bg-sky-50 rounded-full text-sky-500 transition-colors" title="Compartir en Twitter"><Twitter className="w-5 h-5"/></button>
                  <div className="relative">
-                   <button onClick={() => handleShare('copy')} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"><Share2 className="w-5 h-5"/></button>
+                   <button onClick={() => handleShare('copy')} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors" title="Copiar enlace"><Share2 className="w-5 h-5"/></button>
                    <AnimatePresence>
                      {showShareTooltip && (
                        <motion.div 
@@ -150,22 +161,35 @@ export default function Article() {
           <div className="bg-gray-900 text-white p-8 rounded-2xl sticky top-24">
             <h3 className="font-serif text-2xl font-bold mb-4">Sobre el autor</h3>
             <div className="flex items-center gap-4 mb-4">
-               <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center"><UserIcon className="w-6 h-6"/></div>
+               <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                 <UserIcon className="w-6 h-6"/>
+               </div>
                <span className="font-bold text-lg">{noticia.autor_nombre}</span>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed mb-6">
               {noticia.autor_bio || 'Periodista especializado en actualidad nacional con más de 10 años de trayectoria.'}
             </p>
-            <button 
-              onClick={handleFollow}
-              className={`w-full py-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
-                siguiendo 
-                  ? 'bg-gray-800 text-gray-400 border border-gray-700' 
-                  : 'bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-900/20'
-              }`}
-            >
-              {siguiendo ? <><Check className="w-4 h-4" /> Siguiendo</> : 'Seguir autor'}
-            </button>
+
+            {shouldShowFollowButton && (
+              <button 
+                onClick={handleFollow}
+                className="w-full py-3 bg-red-600 text-white rounded-lg font-bold text-sm hover:bg-red-700 transition-all shadow-lg shadow-red-900/20"
+              >
+                Seguir autor
+              </button>
+            )}
+            
+            {siguiendo && (
+              <div className="flex items-center justify-center gap-2 py-3 bg-gray-800 text-gray-400 rounded-lg text-sm font-bold border border-gray-700">
+                <Check className="w-4 h-4" /> Siguiendo
+              </div>
+            )}
+
+            {isOwnArticle && (
+              <div className="text-xs text-gray-500 text-center italic mt-4">
+                Esta es tu propia noticia
+              </div>
+            )}
           </div>
         </aside>
       </div>

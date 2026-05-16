@@ -105,7 +105,7 @@ export default function App() {
         <div className="flex-1">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/noticia/:id" element={<Article />} />
+            <Route path="/noticia/:id" element={<Article user={user} />} />
             <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login onLogin={setUser} />} />
             <Route path="/registro" element={user ? <Navigate to="/dashboard" /> : <Register />} />
             <Route path="/dashboard" element={user ? <Dashboard user={user} onUserUpdate={setUser} /> : <Navigate to="/login" />} />
