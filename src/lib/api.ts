@@ -121,6 +121,27 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url })
       }) as any,
+
+    track: (id: string, data: any): Promise<any> =>
+      fetchWithAuth(`/api/noticias/${id}/track`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }) as any,
+
+    reaccionar: (id: string, tipo: string): Promise<any> =>
+      fetchWithAuth(`/api/noticias/${id}/reaccionar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo })
+      }) as any,
+
+    compartir: (id: string, plataforma: string): Promise<any> =>
+      fetchWithAuth(`/api/noticias/${id}/compartir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plataforma })
+      }) as any,
   },
   
   admin: {

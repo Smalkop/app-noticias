@@ -287,6 +287,78 @@ app.get('/api/seguidores/mis-seguidores', async (c) => {
   }
 });
 
+// Track visit
+app.post('/api/noticias/:id/track', async (c) => {
+  const noticiaId = c.req.param('id');
+  const { fuente, dispositivo, duracion, scroll, visitor_id } = await c.req.json();
+  const token = getCookie(c, 'token');
+  let usuario_id = null;
+  const ip = c.req.header('cf-connecting-ip') || 'unknown';
+
+  if (token) {
+    try {
+      const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+      const payload = await verify(token, secret, 'HS256');
+      usuario_id = payload.id;
+    } catch (e) {}
+  }
+
+  await c.env.DB.prepare(`
+    INSERT INTO metricas_visitas (noticia_id, usuario_id, visitor_id, ip, fuente, dispositivo, duracion, scroll)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(noticiaId, usuario_id, visitor_id, ip, fuente, dispositivo, duracion, scroll).run();
+
+  return c.json({ success: true });
+});
+
+// Reactions: Toggle
+app.post('/api/noticias/:id/reaccionar', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'Debes iniciar sesión para reaccionar' }, 401);
+  
+  try {
+    const noticiaId = c.req.param('id');
+    const { tipo } = await c.req.json();
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+
+    const existing: any = await c.env.DB.prepare(
+      'SELECT tipo FROM reacciones WHERE noticia_id = ? AND usuario_id = ?'
+    ).bind(noticiaId, payload.id).first();
+
+    if (existing) {
+      if (existing.tipo === tipo) {
+        await c.env.DB.prepare(
+          'DELETE FROM reacciones WHERE noticia_id = ? AND usuario_id = ?'
+        ).bind(noticiaId, payload.id).run();
+        return c.json({ action: 'removed' });
+      } else {
+        await c.env.DB.prepare(
+          'UPDATE reacciones SET tipo = ? WHERE noticia_id = ? AND usuario_id = ?'
+        ).bind(tipo, noticiaId, payload.id).run();
+        return c.json({ action: 'updated' });
+      }
+    } else {
+      await c.env.DB.prepare(
+        'INSERT INTO reacciones (noticia_id, usuario_id, tipo) VALUES (?, ?, ?)'
+      ).bind(noticiaId, payload.id, tipo).run();
+      return c.json({ action: 'added' });
+    }
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// Share: Track
+app.post('/api/noticias/:id/compartir', async (c) => {
+  const noticiaId = c.req.param('id');
+  const { plataforma } = await c.req.json();
+  await c.env.DB.prepare(
+    'INSERT INTO noticia_shares (noticia_id, plataforma) VALUES (?, ?)'
+  ).bind(noticiaId, plataforma).run();
+  return c.json({ success: true });
+});
+
 // Notificaciones: List
 app.get('/api/notificaciones', async (c) => {
   const token = getCookie(c, 'token');
@@ -296,34 +368,27 @@ app.get('/api/notificaciones', async (c) => {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
     const payload = await verify(token, secret, 'HS256');
 
-    const { results } = await c.env.DB.prepare(`
-      SELECT * FROM notificaciones 
-      WHERE usuario_id = ?
-      ORDER BY creado_en DESC
-      LIMIT 20
-    `).bind(payload.id).all();
+    const { results } = await c.env.DB.prepare(
+      'SELECT * FROM notificaciones WHERE usuario_id = ? ORDER BY creado_en DESC LIMIT 50'
+    ).bind(payload.id).all();
 
     return c.json(results || []);
   } catch (error: any) {
-    return c.json({ error: 'Error al obtener notificaciones', details: error.message }, 500);
+    return c.json({ error: 'Error al obtener notificaciones' }, 500);
   }
 });
 
-// Notificaciones: Mark as read
+// Notificaciones: Leer todas
 app.post('/api/notificaciones/leer', async (c) => {
   const token = getCookie(c, 'token');
   if (!token) return c.json({ error: 'No autorizado' }, 401);
-
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
     const payload = await verify(token, secret, 'HS256');
-
-    await c.env.DB.prepare('UPDATE notificaciones SET leida = 1 WHERE usuario_id = ?')
-      .bind(payload.id).run();
-
-    return c.json({ message: 'Leídas' });
+    await c.env.DB.prepare('UPDATE notificaciones SET leida = 1 WHERE usuario_id = ?').bind(payload.id).run();
+    return c.json({ success: true });
   } catch (error: any) {
-    return c.json({ error: 'Error al marcar como leídas', details: error.message }, 500);
+    return c.json({ error: 'Error' }, 500);
   }
 });
 
@@ -380,9 +445,31 @@ app.get('/api/setup-db', async (c) => {
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS metricas_visitas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         noticia_id TEXT NOT NULL,
-        fecha DATE NOT NULL,
-        visitas INTEGER DEFAULT 0,
-        UNIQUE(noticia_id, fecha),
+        usuario_id TEXT,
+        visitor_id TEXT,
+        ip TEXT,
+        fuente TEXT,
+        dispositivo TEXT,
+        duracion INTEGER DEFAULT 0,
+        scroll INTEGER DEFAULT 0,
+        fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (noticia_id) REFERENCES noticias(id)
+      )`),
+      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS reacciones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        noticia_id TEXT NOT NULL,
+        usuario_id TEXT NOT NULL,
+        tipo TEXT NOT NULL,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(noticia_id, usuario_id),
+        FOREIGN KEY (noticia_id) REFERENCES noticias(id),
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+      )`),
+      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS noticia_shares (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        noticia_id TEXT NOT NULL,
+        plataforma TEXT NOT NULL,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (noticia_id) REFERENCES noticias(id)
       )`),
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS seguidores (
@@ -432,7 +519,39 @@ app.get('/api/admin/migrar-db', async (c) => {
       ALTER TABLE noticias ADD COLUMN patrocinio_ruc TEXT;
       ALTER TABLE noticias ADD COLUMN patrocinio_estado TEXT DEFAULT 'pendiente';
       ALTER TABLE noticias ADD COLUMN patrocinio_comprobante TEXT;
-    `).catch(() => console.log('Columnas ya existen o error en migración'));
+    `).catch(() => console.log('Columnas patrocionio ya existen'));
+
+    // Advanced metrics migration
+    await c.env.DB.exec(`
+      ALTER TABLE metricas_visitas ADD COLUMN usuario_id TEXT;
+      ALTER TABLE metricas_visitas ADD COLUMN visitor_id TEXT;
+      ALTER TABLE metricas_visitas ADD COLUMN ip TEXT;
+      ALTER TABLE metricas_visitas ADD COLUMN fuente TEXT;
+      ALTER TABLE metricas_visitas ADD COLUMN dispositivo TEXT;
+      ALTER TABLE metricas_visitas ADD COLUMN duracion INTEGER DEFAULT 0;
+      ALTER TABLE metricas_visitas ADD COLUMN scroll INTEGER DEFAULT 0;
+    `).catch(() => console.log('Columnas metricas ya existen'));
+
+    // New tables
+    await c.env.DB.exec(`
+      CREATE TABLE IF NOT EXISTS reacciones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        noticia_id TEXT,
+        usuario_id TEXT,
+        tipo TEXT,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(noticia_id, usuario_id),
+        FOREIGN KEY (noticia_id) REFERENCES noticias(id),
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+      );
+      CREATE TABLE IF NOT EXISTS noticia_shares (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        noticia_id TEXT,
+        plataforma TEXT,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (noticia_id) REFERENCES noticias(id)
+      );
+    `).catch(() => console.log('Tablas ya existen'));
 
     return c.json({ message: 'Migración completada' });
   } catch (error: any) {
@@ -845,18 +964,45 @@ app.get('/api/noticias', async (c) => {
 // Noticias: Get
 app.get('/api/noticias/:id', async (c) => {
   const id = c.req.param('id');
+  const token = getCookie(c, 'token');
+  let currentUserId = null;
+  
+  if (token) {
+    try {
+      const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+      const payload = await verify(token, secret, 'HS256');
+      currentUserId = payload.id;
+    } catch (e) {}
+  }
+
   try {
     const noticia: any = await c.env.DB.prepare(
       'SELECT n.*, u.nombre as autor_nombre, u.bio as autor_bio, c.nombre as categoria_nombre, c.slug as categoria_slug FROM noticias n JOIN usuarios u ON n.autor_id = u.id JOIN categorias c ON n.categoria_id = c.id WHERE n.id = ?'
     ).bind(id).first();
 
     if (noticia) {
-      // Incrementar visitas (en Cloudflare esto es asíncrono idealmente)
-      c.executionCtx.waitUntil(
-        c.env.DB.prepare(
-          "INSERT INTO metricas_visitas (noticia_id, fecha, visitas) VALUES (?, date('now'), 1) ON CONFLICT(noticia_id, fecha) DO UPDATE SET visitas = visitas + 1"
-        ).bind(id).run()
-      );
+      // Reacciones count
+      const { results: reacciones } = await c.env.DB.prepare(
+        'SELECT tipo, COUNT(*) as total FROM reacciones WHERE noticia_id = ? GROUP BY tipo'
+      ).bind(id).all();
+      
+      const reaccionesMap: any = {};
+      reacciones?.forEach((r: any) => {
+        reaccionesMap[r.tipo] = r.total;
+      });
+
+      // User reaccion
+      let mi_reaccion = null;
+      if (currentUserId) {
+        const r: any = await c.env.DB.prepare(
+          'SELECT tipo FROM reacciones WHERE noticia_id = ? AND usuario_id = ?'
+        ).bind(id, currentUserId).first();
+        if (r) mi_reaccion = r.tipo;
+      }
+
+      noticia.reacciones = reaccionesMap;
+      noticia.mi_reaccion = mi_reaccion;
+      
       return c.json(noticia);
     } else {
       return c.json({ error: 'Noticia no encontrada' }, 404);
@@ -901,50 +1047,83 @@ app.get('/api/images/*', async (c) => {
   return new Response(object.body, { headers });
 });
 
-// Métricas
+// Metrics: Detailed stats
 app.get('/api/metricas', async (c) => {
   const token = getCookie(c, 'token');
   if (!token) return c.json({ error: 'No autorizado' }, 401);
-
-  const periodo = c.req.query('periodo') || 'mes'; // dia, mes, año
+  const periodo = c.req.query('periodo') || 'mes';
   const noticiaId = c.req.query('noticiaId');
 
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
     const payload = await verify(token, secret, 'HS256');
     
-    let dateFilter = "date('now', '-1 month')";
-    if (periodo === 'dia') dateFilter = "date('now')";
-    if (periodo === 'año') dateFilter = "date('now', '-1 year')";
+    let dateFilter = "datetime('now', '-30 days')";
+    if (periodo === 'dia') dateFilter = "datetime('now', '-1 day')";
+    if (periodo === 'semana') dateFilter = "datetime('now', '-7 days')";
+    if (periodo === 'año') dateFilter = "datetime('now', '-1 year')";
 
-    let query = `
-      SELECT n.id, n.titulo, COALESCE(SUM(m.visitas), 0) as total_visitas 
-      FROM noticias n 
-      LEFT JOIN metricas_visitas m ON n.id = m.noticia_id AND m.fecha >= ${dateFilter}
-    `;
-    const params: any[] = [];
-    
-    const filters = [];
-    if (payload.rol !== 'admin') {
-      filters.push('n.autor_id = ?');
-      params.push(payload.id);
-    }
     if (noticiaId) {
-      filters.push('n.id = ?');
-      params.push(noticiaId);
-    }
+      const stats: any = await c.env.DB.prepare(`
+        SELECT 
+          n.titulo,
+          COUNT(m.id) as total_visitas,
+          COUNT(DISTINCT COALESCE(m.usuario_id, m.visitor_id, m.ip)) as vistas_unicas,
+          SUM(CASE WHEN m.fuente = 'redes' THEN 1 ELSE 0 END) as fuentes_redes,
+          SUM(CASE WHEN m.fuente = 'buscador' THEN 1 ELSE 0 END) as fuentes_buscador,
+          SUM(CASE WHEN m.fuente = 'directo' THEN 1 ELSE 0 END) as fuentes_directo,
+          SUM(CASE WHEN m.dispositivo = 'mobile' THEN 1 ELSE 0 END) as dispositivos_mobile,
+          SUM(CASE WHEN m.dispositivo = 'desktop' THEN 1 ELSE 0 END) as dispositivos_desktop,
+          AVG(m.duracion) as tiempo_medio,
+          AVG(m.scroll) as scroll_medio,
+          SUM(CASE WHEN m.duracion < 5 THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(m.id), 0) as rebotes,
+          (SELECT COUNT(*) FROM reacciones WHERE noticia_id = n.id) as interacciones,
+          (SELECT COUNT(*) FROM noticia_shares WHERE noticia_id = n.id) as compartidos
+        FROM noticias n
+        LEFT JOIN metricas_visitas m ON n.id = m.noticia_id AND m.fecha >= ${dateFilter}
+        WHERE n.id = ?
+        GROUP BY n.id
+      `).bind(noticiaId).first();
 
-    if (filters.length > 0) {
-      query += ' WHERE ' + filters.join(' AND ');
+      if (!stats) return c.json([]);
+
+      return c.json([{
+        titulo: stats.titulo,
+        total_visitas: stats.total_visitas || 0,
+        vistas_unicas: stats.vistas_unicas || 0,
+        fuentes: { 
+          directo: stats.fuentes_directo || 0, 
+          redes: stats.fuentes_redes || 0, 
+          buscador: stats.fuentes_buscador || 0 
+        },
+        dispositivos: { 
+          mobile: stats.dispositivos_mobile || 0, 
+          desktop: stats.dispositivos_desktop || 0 
+        },
+        tiempo_medio: Math.round(stats.tiempo_medio || 0),
+        scroll_medio: Math.round(stats.scroll_medio || 0),
+        rebotes: Math.round(stats.rebotes || 0),
+        interacciones: stats.interacciones || 0,
+        compartidos: stats.compartidos || 0
+      }]);
+    } else {
+      let query = `
+        SELECT n.id, n.titulo, COUNT(m.id) as total_visitas 
+        FROM noticias n 
+        LEFT JOIN metricas_visitas m ON n.id = m.noticia_id AND m.fecha >= ${dateFilter}
+      `;
+      const params = [];
+      if (payload.rol === 'autor') {
+        query += ' WHERE n.autor_id = ?';
+        params.push(payload.id);
+      }
+      query += ' GROUP BY n.id, n.titulo ORDER BY total_visitas DESC LIMIT 10';
+      
+      const { results } = await c.env.DB.prepare(query).bind(...params).all();
+      return c.json(results || []);
     }
-    
-    query += ' GROUP BY n.id, n.titulo ORDER BY total_visitas DESC LIMIT 10';
-    
-    const { results } = await c.env.DB.prepare(query).bind(...params).all();
-    return c.json(results || []);
-  } catch (error: any) {
-    console.error('Metricas Error:', error.message);
-    return c.json({ error: 'Error al obtener métricas' }, 500);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
   }
 });
 

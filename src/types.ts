@@ -39,11 +39,23 @@ export interface Noticia {
   patrocinio_ruc?: string;
   patrocinio_estado?: 'pendiente' | 'en revision' | 'aceptado' | 'rechazado' | 'envie otra';
   patrocinio_comprobante?: string;
+  // Dynamic stats
+  reacciones?: { [key: string]: number };
+  mi_reaccion?: string;
 }
 
 export interface Metrica {
+  id?: string;
   titulo: string;
   total_visitas: number;
+  vistas_unicas: number;
+  fuentes: { directo: number; redes: number; buscador: number };
+  dispositivos: { mobile: number; desktop: number };
+  tiempo_medio: number;
+  scroll_medio: number;
+  rebotes: number;
+  interacciones: number;
+  compartidos: number;
 }
 
 export interface Notificacion {

@@ -2,9 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { User, Metrica, Categoria, Noticia } from '../types';
 import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, ResponsiveContainer, 
+  PieChart, Pie, Cell, AreaChart, Area
+} from 'recharts';
+import { 
   BarChart3, Plus, FileText, Image as ImageIcon, Send, 
   Settings, User as UserIcon, Trash2, Edit, CheckCircle, XCircle,
-  Clock, AlertCircle, Bell, Users, Calendar
+  Clock, AlertCircle, Bell, Users, Calendar, ArrowUpRight, 
+  Smartphone, Monitor, Globe, Activity, ChevronLeft, ChevronRight,
+  Eye, Share2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { compressImage } from '../lib/imageUtils';
@@ -25,6 +31,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'metrics' | 'create' | 'manage' | 'profile' | 'admin' | 'notifications'>('metrics');
   const [metricPeriod, setMetricPeriod] = useState('mes');
+  const [selectedMetrica, setSelectedMetrica] = useState<Metrica | null>(null);
   const [selectedNoticiaId, setSelectedNoticiaId] = useState<string | null>(null);
 
   // Form state for News
@@ -64,7 +71,11 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
     try {
       if (activeTab === 'metrics') {
         const results = await api.metricas.get(metricPeriod, selectedNoticiaId || undefined);
-        setMetricas(results);
+        if (selectedNoticiaId && results.length > 0) {
+          setSelectedMetrica(results[0]);
+        } else {
+          setMetricas(results);
+        }
         if (user.rol === 'autor' || user.rol === 'admin') {
           const follows = await api.seguidores.misSeguidores();
           setSeguidores(follows);
@@ -346,135 +357,225 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'metrics' && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-8">
-                  <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
-                    <div className="flex items-center justify-between mb-8">
-                      <h3 className="text-xl font-bold flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-red-600" /> 
-                        {selectedNoticiaId ? 'Estadísticas de Noticia' : 'Noticias más leídas'}
-                      </h3>
-                      <div className="flex items-center gap-4">
-                        {selectedNoticiaId && (
-                          <button 
-                            onClick={() => setSelectedNoticiaId(null)}
-                            className="text-xs font-bold text-gray-500 hover:text-red-600 transition-colors"
-                          >
-                            Volver al ranking
-                          </button>
-                        )}
-                        <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
-                          {['dia', 'mes', 'año'].map((p) => (
-                            <button 
-                              key={p}
-                              onClick={() => setMetricPeriod(p)}
-                              className={`px-3 py-1 text-xs font-bold rounded-md transition-all capitalize ${metricPeriod === p ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+              <div className="animate-in fade-in duration-500">
+                {selectedMetrica ? (
+                  <div className="space-y-8">
+                    <div className="flex items-center justify-between mb-2">
+                      <button 
+                        onClick={() => {
+                          setSelectedNoticiaId(null);
+                          setSelectedMetrica(null);
+                        }}
+                        className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-red-600 transition-colors"
+                      >
+                        <ChevronLeft className="w-4 h-4" /> Volver al ranking
+                      </button>
+                      <h2 className="text-xl font-serif font-bold text-gray-900 truncate max-w-lg">{selectedMetrica.titulo}</h2>
+                    </div>
+
+                    {/* Grid de Métricas Avanzadas */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <MetricCard 
+                        icon={<Eye className="w-5 h-5"/>} 
+                        label="Alcance" 
+                        value={selectedMetrica.total_visitas} 
+                        subValue={`${selectedMetrica.vistas_unicas || 0} únicas`} 
+                        color="red"
+                      />
+                      <MetricCard 
+                        icon={<Clock className="w-5 h-5"/>} 
+                        label="Calidad" 
+                        value={`${selectedMetrica.tiempo_medio || 0}s`} 
+                        subValue={`Rebotes: ${selectedMetrica.rebotes || 0}%`} 
+                        color="blue"
+                      />
+                      <MetricCard 
+                        icon={<Activity className="w-5 h-5"/>} 
+                        label="Engagement" 
+                        value={`${selectedMetrica.scroll_medio || 0}%`} 
+                        subValue={`${selectedMetrica.interacciones || 0} reacciones`} 
+                        color="purple"
+                      />
+                      <MetricCard 
+                        icon={<Share2 className="w-5 h-5"/>} 
+                        label="Lealtad" 
+                        value={selectedMetrica.compartidos || 0} 
+                        subValue="Veces compartido" 
+                        color="amber"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+                         <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-8 flex items-center gap-2">
+                           <Globe className="w-4 h-4"/> Fuentes de Tráfico
+                         </h3>
+                         <div className="h-64">
+                           <ResponsiveContainer width="100%" height="100%">
+                             <PieChart>
+                               <Pie
+                                 data={[
+                                   { name: 'Directo', value: selectedMetrica.fuentes?.directo || 0 },
+                                   { name: 'Redes', value: selectedMetrica.fuentes?.redes || 0 },
+                                   { name: 'Buscador', value: selectedMetrica.fuentes?.buscador || 0 },
+                                 ]}
+                                 innerRadius={60}
+                                 outerRadius={80}
+                                 paddingAngle={5}
+                                 dataKey="value"
+                               >
+                                 {['#ef4444', '#1f2937', '#6b7280'].map((color, index) => (
+                                   <Cell key={`cell-${index}`} fill={color} />
+                                 ))}
+                               </Pie>
+                               <ReTooltip />
+                             </PieChart>
+                           </ResponsiveContainer>
+                         </div>
+                       </div>
+
+                       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+                         <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-8 flex items-center gap-2">
+                           <Smartphone className="w-4 h-4"/> Segmentación Dispositivo
+                         </h3>
+                         <div className="h-64">
+                           <ResponsiveContainer width="100%" height="100%">
+                             <BarChart data={[
+                               { name: 'Móvil', value: selectedMetrica.dispositivos?.mobile || 0 },
+                               { name: 'Desktop', value: selectedMetrica.dispositivos?.desktop || 0 },
+                             ]}>
+                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 700 }} />
+                               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                               <ReTooltip />
+                               <Bar dataKey="value" fill="#ef4444" radius={[8, 8, 0, 0]} />
+                             </BarChart>
+                           </ResponsiveContainer>
+                         </div>
+                       </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="lg:col-span-2 space-y-8">
+                      <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
+                        <div className="flex items-center justify-between mb-8">
+                          <h3 className="text-xl font-bold flex items-center gap-2">
+                            <FileText className="w-5 h-5 text-red-600" /> 
+                            Ranking de Noticias
+                          </h3>
+                          <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
+                            {['dia', 'mes', 'año'].map((p) => (
+                              <button 
+                                key={p}
+                                onClick={() => setMetricPeriod(p)}
+                                className={`px-3 py-1 text-xs font-bold rounded-md transition-all capitalize ${metricPeriod === p ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                              >
+                                {p === 'dia' ? 'Hoy' : p}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-6">
+                          {Array.isArray(metricas) && metricas.length > 0 ? metricas.map((m, i) => (
+                            <div 
+                              key={i} 
+                              className="flex items-center gap-4 cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition-colors group"
+                              onClick={() => setSelectedNoticiaId(m.id || null)}
                             >
-                              {p}
-                            </button>
-                          ))}
+                              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-400 text-xs">
+                                {i + 1}
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-bold text-gray-900 line-clamp-1 group-hover:text-red-600 transition-colors">{m.titulo}</p>
+                                <div className="w-full bg-gray-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                                  <div 
+                                    className="bg-red-500 h-full rounded-full transition-all duration-1000" 
+                                    style={{ width: `${(m.total_visitas / (metricas[0]?.total_visitas || 1)) * 100}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                              <div className="text-right flex items-center gap-4">
+                                <span className="font-mono font-bold text-gray-900">{m.total_visitas}</span>
+                                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-red-500 transition-colors" />
+                              </div>
+                            </div>
+                          )) : (
+                            <div className="text-center py-12">
+                              <AlertCircle className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                              <p className="text-gray-400 italic">No hay datos de visitas para este periodo.</p>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </div>
-                    <div className="space-y-6">
-                      {Array.isArray(metricas) && metricas.length > 0 ? metricas.map((m, i) => (
-                        <div 
-                          key={i} 
-                          className={`flex items-center gap-4 ${!selectedNoticiaId ? 'cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition-colors' : ''}`}
-                          onClick={() => {
-                            if (!selectedNoticiaId && (m as any).id) {
-                              setSelectedNoticiaId((m as any).id);
-                            }
-                          }}
-                        >
-                          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-400 text-xs">
-                            {i + 1}
+
+                      {(user.rol === 'autor' || user.rol === 'admin') && (
+                        <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
+                          <h3 className="text-xl font-bold mb-8 flex items-center gap-2">
+                            <Users className="w-5 h-5 text-red-600" /> Mis Suscriptores ({seguidores.length})
+                          </h3>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+                            {seguidores.length > 0 ? seguidores.map((s) => (
+                              <div key={s.seguidor_id} className="flex flex-col items-center text-center">
+                                {s.seguidor_foto ? (
+                                  <img src={s.seguidor_foto} className="w-12 h-12 rounded-full object-cover mb-2 border border-gray-100" />
+                                ) : (
+                                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 mb-2">
+                                    <UserIcon className="w-6 h-6" />
+                                  </div>
+                                )}
+                                <span className="text-xs font-bold text-gray-900 line-clamp-1">{s.seguidor_nombre}</span>
+                                <span className="text-[10px] text-gray-400 capitalize">{new Date(s.creado_en).toLocaleDateString()}</span>
+                              </div>
+                            )) : (
+                              <div className="col-span-full py-8 text-center text-gray-400 italic text-sm">
+                                Aún no tienes seguidores. Interactúa más con tus lectores.
+                              </div>
+                            )}
                           </div>
-                          <div className="flex-1">
-                            <p className="font-bold text-gray-900 line-clamp-1">{m.titulo}</p>
-                            <div className="w-full bg-gray-100 h-2 rounded-full mt-2 overflow-hidden">
-                              <div 
-                                className="bg-red-500 h-full rounded-full transition-all duration-1000" 
-                                style={{ width: `${(m.total_visitas / (metricas[0]?.total_visitas || 1)) * 100}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                          <span className="font-mono font-bold text-red-600">{m.total_visitas}</span>
-                        </div>
-                      )) : (
-                        <div className="text-center py-12">
-                          <AlertCircle className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-                          <p className="text-gray-400 italic">No hay datos de visitas para este periodo.</p>
                         </div>
                       )}
                     </div>
-                  </div>
 
-                  {(user.rol === 'autor' || user.rol === 'admin') && (
-                    <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
-                      <h3 className="text-xl font-bold mb-8 flex items-center gap-2">
-                        <Users className="w-5 h-5 text-red-600" /> Mis Suscriptores ({seguidores.length})
-                      </h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
-                        {seguidores.length > 0 ? seguidores.map((s) => (
-                          <div key={s.seguidor_id} className="flex flex-col items-center text-center">
-                            {s.seguidor_foto ? (
-                              <img src={s.seguidor_foto} className="w-12 h-12 rounded-full object-cover mb-2 border border-gray-100" />
-                            ) : (
-                              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 mb-2">
-                                <UserIcon className="w-6 h-6" />
-                              </div>
-                            )}
-                            <span className="text-xs font-bold text-gray-900 line-clamp-1">{s.seguidor_nombre}</span>
-                            <span className="text-[10px] text-gray-400 capitalize">{new Date(s.creado_en).toLocaleDateString()}</span>
+                    <div className="space-y-8">
+                      <div className="bg-gradient-to-br from-red-600 to-red-800 text-white p-8 rounded-2xl shadow-xl flex flex-col justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold opacity-80 mb-1">Impacto ({metricPeriod})</h3>
+                          <p className="text-5xl font-serif font-bold">
+                            {Array.isArray(metricas) ? metricas.reduce((acc, m) => acc + m.total_visitas, 0) : 0}
+                          </p>
+                          <p className="text-sm opacity-60 mt-2">Visitas en el periodo seleccionado</p>
+                        </div>
+                        <div className="mt-12 bg-white/10 p-4 rounded-xl backdrop-blur-sm">
+                          <p className="text-xs font-bold uppercase tracking-wider mb-2">Tip del día</p>
+                          <p className="text-sm italic">
+                            {getTipOfDay()}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                        <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-red-600" /> Resumen de Actividad
+                        </h4>
+                        <div className="space-y-3">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Noticias publicadas</span>
+                            <span className="font-bold">{misNoticias.length}</span>
                           </div>
-                        )) : (
-                          <div className="col-span-full py-8 text-center text-gray-400 italic text-sm">
-                            Aún no tienes seguidores. Interactúa más con tus lectores.
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Periodo activo</span>
+                            <span className="font-bold capitalize">{metricPeriod}</span>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-8">
-                  <div className="bg-gradient-to-br from-red-600 to-red-800 text-white p-8 rounded-2xl shadow-xl flex flex-col justify-between">
-                    <div>
-                      <h3 className="text-lg font-bold opacity-80 mb-1">Impacto ({metricPeriod})</h3>
-                      <p className="text-5xl font-serif font-bold">
-                        {Array.isArray(metricas) ? metricas.reduce((acc, m) => acc + m.total_visitas, 0) : 0}
-                      </p>
-                      <p className="text-sm opacity-60 mt-2">Visitas en el periodo seleccionado</p>
-                    </div>
-                    <div className="mt-12 bg-white/10 p-4 rounded-xl backdrop-blur-sm">
-                      <p className="text-xs font-bold uppercase tracking-wider mb-2">Tip del día</p>
-                      <p className="text-sm italic">
-                        {getTipOfDay()}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-red-600" /> Resumen de Actividad
-                    </h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Noticias publicadas</span>
-                        <span className="font-bold">{misNoticias.length}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Periodo activo</span>
-                        <span className="font-bold">{metricPeriod}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Ranking global</span>
-                        <span className="font-bold text-red-600">#4</span>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Ranking global</span>
+                            <span className="font-bold text-red-600">#4</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -1074,6 +1175,28 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
           </div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function MetricCard({ icon, label, value, subValue, color }: { icon: React.ReactNode, label: string, value: string | number, subValue: string, color: string }) {
+  const colorMap: any = {
+    red: 'bg-red-50 text-red-600',
+    blue: 'bg-blue-50 text-blue-600',
+    purple: 'bg-purple-50 text-purple-600',
+    amber: 'bg-amber-50 text-amber-600'
+  };
+  
+  return (
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <div className={`p-2 rounded-lg ${colorMap[color]}`}>{icon}</div>
+        <span className="text-[10px] font-black uppercase text-gray-400">{label}</span>
+      </div>
+      <div>
+        <p className="text-3xl font-black text-gray-900">{value}</p>
+        <p className="text-xs text-gray-500 mt-1">{subValue}</p>
+      </div>
     </div>
   );
 }
