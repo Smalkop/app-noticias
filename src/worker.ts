@@ -109,7 +109,8 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
       },
       body: JSON.stringify({
         emails: [emailData],
-        id_template: "44146dba-5aa2-4639-9198-d716abf985d8" // Usamos id_template según diagnóstico exitoso
+        double_optin: "1", // Disparador de confirmación
+        id_template: "44146dba-5aa2-4639-9198-d716abf985d8" // Planilla específica
       })
     });
 
@@ -1127,20 +1128,25 @@ app.get('/api/admin/test-sendpulse', async (c) => {
 
     // Try adding test email with several variations to find the one that triggers the template
     const templateId = "44146dba-5aa2-4639-9198-d716abf985d8";
-    const sender = "brahiangonzalez300@gmail.com"; 
     
     const strategies = [
-      { name: 'ST: confirmation "1" (Standard)', body: { emails: [email], confirmation: "1" } },
-      { name: 'ST: confirmation "1" + sender_email', body: { emails: [email], confirmation: "1", sender_email: sender } },
-      { name: 'ST: UUID + sender_email', body: { emails: [email], confirmation: templateId, sender_email: sender } },
-      { name: 'ST: double_optin: 1', body: { emails: [email], double_optin: "1" } },
-      { name: 'ST: confirmation "true" (string)', body: { emails: [email], confirmation: "true" } }
+      { name: 'ST: id_template only (prev success)', body: { emails: [email], id_template: templateId } },
+      { name: 'ST: double_optin: "1" only (prev success)', body: { emails: [email], double_optin: "1" } },
+      { name: 'ST: double_optin: "1" + id_template', body: { emails: [email], double_optin: "1", id_template: templateId } },
+      { name: 'ST: confirmation: "1" + id_template', body: { emails: [email], confirmation: "1", id_template: templateId } },
+      { name: 'ST: confirmation: UUID', body: { emails: [email], confirmation: templateId } }
     ];
 
     const results = [];
     for (const strategy of strategies) {
       try {
-        // En diagnóstico, intentamos registrar de nuevo para verificar
+        // Borramos para prueba limpia
+        await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emails: [email] })
+        });
+
         const res = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
