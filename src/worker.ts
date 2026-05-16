@@ -1113,6 +1113,12 @@ app.get('/api/admin/test-sendpulse', async (c) => {
 
     const listInfo = await listRes.json();
 
+    // Check list settings (Opt-in info)
+    const settingsRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/settings`, {
+      headers: { 'Authorization': `Bearer ${access_token}` }
+    });
+    const listSettings = settingsRes.ok ? await settingsRes.json() : { error: 'Settings not available', status: settingsRes.status };
+
     // Check if current user is already in list
     const checkRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails/${encodeURIComponent(email)}`, {
       headers: { 'Authorization': `Bearer ${access_token}` }
@@ -1121,10 +1127,14 @@ app.get('/api/admin/test-sendpulse', async (c) => {
 
     // Try adding test email with several variations to find the one that triggers the template
     const templateId = "44146dba-5aa2-4639-9198-d716abf985d8";
+    const sender = "brahiangonzalez300@gmail.com"; 
+    
     const strategies = [
-      { name: 'ST: id_template', body: { emails: [email], id_template: templateId } },
-      { name: 'ST: template_id', body: { emails: [email], template_id: templateId } },
-      { name: 'ST: confirmation (UUID)', body: { emails: [email], confirmation: templateId } }
+      { name: 'ST: confirmation "1" (Standard)', body: { emails: [email], confirmation: "1" } },
+      { name: 'ST: confirmation "1" + sender_email', body: { emails: [email], confirmation: "1", sender_email: sender } },
+      { name: 'ST: UUID + sender_email', body: { emails: [email], confirmation: templateId, sender_email: sender } },
+      { name: 'ST: double_optin: 1', body: { emails: [email], double_optin: "1" } },
+      { name: 'ST: confirmation "true" (string)', body: { emails: [email], confirmation: "true" } }
     ];
 
     const results = [];
@@ -1144,8 +1154,9 @@ app.get('/api/admin/test-sendpulse', async (c) => {
     }
 
     return c.json({ 
-      message: 'Confirmación de envío configurada correctamente', 
+      message: 'Diagnóstico avanzado de DOI completado', 
       list: listInfo,
+      settings: listSettings,
       currentUserStatus: checkUser,
       results
     });
