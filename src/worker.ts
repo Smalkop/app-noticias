@@ -100,7 +100,7 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
       emailData.variables.Telefono = phone;
     }
 
-    // 3. Enviar a la lista (Tratar de ser lo más simple posible primero)
+    // 3. Enviar a la lista con el ID de Planilla proporcionado
     const spRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
       method: 'POST',
       headers: {
@@ -108,8 +108,8 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        emails: [emailData]
-        // Eliminamos confirmation por ahora para asegurar que el registro base funciona
+        emails: [emailData],
+        confirmation: "44146dba-5aa2-4639-9198-d716abf985d8" // Planilla de confirmación
       })
     });
 
@@ -1108,10 +1108,10 @@ app.get('/api/admin/test-sendpulse', async (c) => {
 
     // Try adding test email with multiple strategies
     const strategies = [
-      { name: 'Simple (Email array of strings)', body: { emails: [email] } },
-      { name: 'Object (With variables)', body: { emails: [{ email, variables: { 'Nombre': 'Admin Test' } }] } },
-      { name: 'With Confirmation String', body: { emails: [email], confirmation: "1" } },
-      { name: 'With Confirmation Int', body: { emails: [email], confirmation: 1 } }
+      { name: 'Simple (Email only)', body: { emails: [email] } },
+      { name: 'With Template ID (Provided)', body: { emails: [email], confirmation: "44146dba-5aa2-4639-9198-d716abf985d8" } },
+      { name: 'Simple "1" DOI', body: { emails: [email], confirmation: "1" } },
+      { name: 'With Variables & Template', body: { emails: [{ email, variables: { 'Nombre': 'Admin Test', 'name': 'Admin Test' } }], confirmation: "44146dba-5aa2-4639-9198-d716abf985d8" } }
     ];
 
     const results = [];
