@@ -100,7 +100,7 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
       emailData.variables.Telefono = phone;
     }
 
-    // 3. Enviar a la lista con el ID de Planilla proporcionado
+    // 3. Enviar a la lista con la estructura exacta de la documentación
     const spRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
       method: 'POST',
       headers: {
@@ -109,8 +109,10 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
       },
       body: JSON.stringify({
         emails: [emailData],
-        double_optin: "1", // Disparador de confirmación
-        id_template: "44146dba-5aa2-4639-9198-d716abf985d8" // Planilla específica
+        confirmation: "force", // Valor exacto requerido para DOI
+        sender_email: "brahiangonzalez300@gmail.com", // Emisor activado en tu cuenta
+        template_id: "44146dba-5aa2-4639-9198-d716abf985d8", // Tu UUID de planilla
+        message_lang: "es" // Idioma del correo
       })
     });
 
@@ -1126,15 +1128,30 @@ app.get('/api/admin/test-sendpulse', async (c) => {
     });
     const checkUser = checkRes.ok ? await checkRes.json() : { error: 'Not found or fail', status: checkRes.status };
 
-    // Try adding test email with several variations to find the one that triggers the template
+    // Pruebas finales según documentación oficial
     const templateId = "44146dba-5aa2-4639-9198-d716abf985d8";
+    const sender = "brahiangonzalez300@gmail.com";
     
     const strategies = [
-      { name: 'ST: id_template only (prev success)', body: { emails: [email], id_template: templateId } },
-      { name: 'ST: double_optin: "1" only (prev success)', body: { emails: [email], double_optin: "1" } },
-      { name: 'ST: double_optin: "1" + id_template', body: { emails: [email], double_optin: "1", id_template: templateId } },
-      { name: 'ST: confirmation: "1" + id_template', body: { emails: [email], confirmation: "1", id_template: templateId } },
-      { name: 'ST: confirmation: UUID', body: { emails: [email], confirmation: templateId } }
+      { 
+        name: 'ST: Documentation structure (FORCE)', 
+        body: { 
+          emails: [{ email, variables: { "Nombre": "Admin Test" } }], 
+          confirmation: "force", 
+          sender_email: sender, 
+          template_id: templateId, 
+          message_lang: "es" 
+        } 
+      },
+      { 
+        name: 'ST: Legacy confirmation "1"', 
+        body: { 
+          emails: [email], 
+          confirmation: "1", 
+          sender_email: sender, 
+          template_id: templateId 
+        } 
+      }
     ];
 
     const results = [];
