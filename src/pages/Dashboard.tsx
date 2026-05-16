@@ -1297,22 +1297,25 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
                   <button 
                     onClick={async () => {
-                      if(!window.confirm('Se enviará un correo de prueba a su dirección actual (si está registrada). ¿Continuar?')) return;
+                      if(!window.confirm('Se realizará un diagnóstico profundo de SendPulse probando 4 estrategias diferentes. ¿Continuar?')) return;
                       try {
                         const res = await fetch('/api/admin/test-sendpulse');
                         const data: any = await res.json();
                         if (res.ok) {
-                          alert(`Éxito: ${data.message}\nNombre Lista: ${data.list?.name || 'N/A'}\nDetalles: ${JSON.stringify(data.addResult)}`);
+                          let summary = `Resultados del Diagnóstico:\nLista: ${data.list?.name || 'N/A'}\n\n`;
+                          data.results.forEach((r: any) => {
+                            summary += `ST: ${r.strategy}\nStatus: ${r.status} ${r.ok ? '✅' : '❌'}\nRes: ${JSON.stringify(r.data)}\n\n`;
+                          });
+                          alert(summary);
+                          console.log('Diagnostic full data:', data);
                         } else {
-                          // Crucial: Show exact error from server
-                          alert(`Error: ${data.error}\nDetalles técnicos: ${data.details || 'Ver consola'}`);
-                          console.error('Test SendPulse fail:', data);
+                          alert(`Error de Diagnóstico: ${data.error}\n${data.details || ''}`);
                         }
                       } catch (e) { alert('Error de conexión con el servidor'); }
                     }}
                     className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 transition-all flex items-center gap-2"
                   >
-                    <Bell className="w-5 h-5" /> Probar SendPulse (Diagnóstico)
+                    <Bell className="w-5 h-5" /> Diagnóstico SendPulse
                   </button>
 
                   <button 

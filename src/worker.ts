@@ -100,7 +100,7 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
       emailData.variables.Telefono = phone;
     }
 
-    // 3. Enviar a la lista
+    // 3. Enviar a la lista (Tratar de ser lo más simple posible primero)
     const spRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
       method: 'POST',
       headers: {
@@ -108,15 +108,15 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        emails: [emailData],
-        confirmation: "1" // Forzar envío de correo de confirmación (Debe ser string)
+        emails: [emailData]
+        // Eliminamos confirmation por ahora para asegurar que el registro base funciona
       })
     });
 
     const result = await spRes.json() as any;
     if (!spRes.ok) {
       console.error('SendPulse API Error:', result);
-      return { success: false, error: result.message || 'Error desconocido API' };
+      return { success: false, error: result.message || 'Error desconocido API', details: result };
     }
 
     console.log(`SendPulse Success para ${email}:`, result);
@@ -1106,22 +1106,33 @@ app.get('/api/admin/test-sendpulse', async (c) => {
 
     const listInfo = await listRes.json();
 
-    // Try adding test email
-    const addRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        emails: [{ email, variables: { 'Nombre': 'Admin Test', 'name': 'Admin Test' } }],
-        confirmation: "1"
-      })
-    });
+    // Try adding test email with multiple strategies
+    const strategies = [
+      { name: 'Simple (Email array of strings)', body: { emails: [email] } },
+      { name: 'Object (With variables)', body: { emails: [{ email, variables: { 'Nombre': 'Admin Test' } }] } },
+      { name: 'With Confirmation String', body: { emails: [email], confirmation: "1" } },
+      { name: 'With Confirmation Int', body: { emails: [email], confirmation: 1 } }
+    ];
 
-    const addResult = await addRes.json();
+    const results = [];
+    for (const strategy of strategies) {
+      try {
+        const res = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(strategy.body)
+        });
+        const data = await res.json();
+        results.push({ strategy: strategy.name, status: res.status, ok: res.ok, data });
+      } catch (e: any) {
+        results.push({ strategy: strategy.name, error: e.message });
+      }
+    }
 
     return c.json({ 
-      message: 'Prueba de SendPulse completada', 
+      message: 'Pruebas de estrategias de SendPulse completadas', 
       list: listInfo,
-      addResult
+      results
     });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
