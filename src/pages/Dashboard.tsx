@@ -10,7 +10,7 @@ import {
   Settings, User as UserIcon, Trash2, Edit, CheckCircle, XCircle,
   Clock, AlertCircle, Bell, Users, Calendar, ArrowUpRight, 
   Smartphone, Monitor, Globe, Activity, ChevronLeft, ChevronRight,
-  Eye, Share2
+  Eye, Share2, Database, ShieldAlert, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { compressImage } from '../lib/imageUtils';
@@ -1039,6 +1039,61 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
         {activeTab === 'admin' && user.rol === 'admin' && (
           <div className="space-y-8">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <Database className="w-5 h-5 text-red-600" /> Mantenimiento de Base de Datos
+                </h3>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex flex-wrap gap-4">
+                  <button 
+                    onClick={async () => {
+                      if(window.confirm('¿Desea limpiar los usuarios no verificados que tienen más de 24 horas?')) {
+                        try {
+                          const res = await fetch('/api/admin/limpiar-usuarios', { method: 'POST' });
+                          const data: any = await res.json();
+                          alert(`Limpieza completada. Usuarios eliminados: ${data.deleted || 0}`);
+                        } catch (e) { alert('Error al limpiar usuarios'); }
+                      }
+                    }}
+                    className="bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center gap-2"
+                  >
+                    <Trash2 className="w-5 h-5" /> Limpiar usuarios no verificados
+                  </button>
+
+                  <button 
+                    onClick={async () => {
+                      if(window.confirm('¡ATENCIÓN! Esto recreará las tablas para permitir el borrado en cascada (CASCADE). Asegúrese de haber realizado una copia de seguridad si es necesario. ¿Continuar?')) {
+                        try {
+                          const res = await fetch('/api/admin/fix-cascades');
+                          const data: any = await res.json();
+                          alert(data.message || 'Proceso finalizado');
+                        } catch (e) { alert('Error al actualizar cascadas'); }
+                      }
+                    }}
+                    className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-black transition-all flex items-center gap-2"
+                  >
+                    <ShieldAlert className="w-5 h-5" /> Corregir Errores de Borrado (CASCADE)
+                  </button>
+
+                  <button 
+                    onClick={async () => {
+                      try {
+                        const res = await fetch('/api/admin/migrar-db');
+                        const data: any = await res.json();
+                        alert(data.message || 'Migración completada');
+                      } catch (e) { alert('Error en migración'); }
+                    }}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
+                  >
+                    <RefreshCw className="w-5 h-5" /> Sincronizar Columnas (Migrar DB)
+                  </button>
+                </div>
+                <p className="text-sm text-gray-500 italic">Use "Corregir Errores de Borrado" si recibe errores de 'FOREIGN KEY constraint failed' al intentar eliminar usuarios manualmente.</p>
+              </div>
+            </div>
+
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-gray-100">
                 <h3 className="text-xl font-bold flex items-center gap-2">

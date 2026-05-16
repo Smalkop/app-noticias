@@ -594,7 +594,7 @@ app.get('/api/setup-db', async (c) => {
         motivo TEXT,
         estado TEXT DEFAULT 'pendiente',
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
       )`),
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS categorias (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -621,8 +621,8 @@ app.get('/api/setup-db', async (c) => {
         patrocinio_ruc TEXT,
         patrocinio_estado TEXT DEFAULT 'pendiente',
         patrocinio_comprobante TEXT,
-        FOREIGN KEY (autor_id) REFERENCES usuarios(id),
-        FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+        FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE
       )`),
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS metricas_visitas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -635,7 +635,7 @@ app.get('/api/setup-db', async (c) => {
         duracion INTEGER DEFAULT 0,
         scroll INTEGER DEFAULT 0,
         fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (noticia_id) REFERENCES noticias(id)
+        FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE
       )`),
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS reacciones (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -644,23 +644,23 @@ app.get('/api/setup-db', async (c) => {
         tipo TEXT NOT NULL,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(noticia_id, usuario_id),
-        FOREIGN KEY (noticia_id) REFERENCES noticias(id),
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
       )`),
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS noticia_shares (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         noticia_id TEXT NOT NULL,
         plataforma TEXT NOT NULL,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (noticia_id) REFERENCES noticias(id)
+        FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE
       )`),
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS seguidores (
         seguidor_id TEXT NOT NULL,
         autor_id TEXT NOT NULL,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (seguidor_id, autor_id),
-        FOREIGN KEY (seguidor_id) REFERENCES usuarios(id),
-        FOREIGN KEY (autor_id) REFERENCES usuarios(id)
+        FOREIGN KEY (seguidor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE
       )`),
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS notificaciones (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -669,7 +669,7 @@ app.get('/api/setup-db', async (c) => {
         tipo TEXT DEFAULT 'info',
         leida INTEGER DEFAULT 0,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
       )`),
       c.env.DB.prepare(`INSERT OR IGNORE INTO categorias (nombre, slug) VALUES 
         ('Política', 'politica'),
@@ -723,15 +723,15 @@ app.get('/api/admin/migrar-db', async (c) => {
         tipo TEXT,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(noticia_id, usuario_id),
-        FOREIGN KEY (noticia_id) REFERENCES noticias(id),
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
       );
       CREATE TABLE IF NOT EXISTS noticia_shares (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         noticia_id TEXT,
         plataforma TEXT,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (noticia_id) REFERENCES noticias(id)
+        FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE
       );
     `).catch(() => console.log('Tablas ya existen'));
 
@@ -744,6 +744,142 @@ app.get('/api/admin/migrar-db', async (c) => {
     return c.json({ message: 'Migración completada' });
   } catch (error: any) {
     return c.json({ error: 'Error en migración', details: error.message }, 500);
+  }
+});
+
+// Admin: Fix Foreign Keys (Drop and recreate with CASCADE)
+app.get('/api/admin/fix-cascades', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    // Turn off FK checks for the migration
+    await c.env.DB.exec('PRAGMA foreign_keys = OFF;');
+
+    // 1. Create temp tables with CASCADE
+    // 2. Transfer data
+    // 3. Drop old, rename new
+    
+    const tablesToFix = [
+      { 
+        name: 'solicitudes_autor', 
+        schema: `CREATE TABLE solicitudes_autor_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          usuario_id TEXT UNIQUE NOT NULL,
+          motivo TEXT,
+          estado TEXT DEFAULT 'pendiente',
+          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+        )`
+      },
+      {
+        name: 'noticias',
+        schema: `CREATE TABLE noticias_new (
+          id TEXT PRIMARY KEY,
+          autor_id TEXT NOT NULL,
+          categoria_id INTEGER NOT NULL,
+          titulo TEXT NOT NULL,
+          subtitulo TEXT,
+          contenido TEXT NOT NULL,
+          imagen_destacada TEXT,
+          estado TEXT DEFAULT 'borrador',
+          destacada INTEGER DEFAULT 0,
+          publicado_en DATETIME,
+          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+          actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+          patrocinada INTEGER DEFAULT 0,
+          patrocinio_monto REAL,
+          patrocinio_marca TEXT,
+          patrocinio_ruc TEXT,
+          patrocinio_estado TEXT DEFAULT 'pendiente',
+          patrocinio_comprobante TEXT,
+          FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+          FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE
+        )`
+      },
+      {
+        name: 'metricas_visitas',
+        schema: `CREATE TABLE metricas_visitas_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          noticia_id TEXT NOT NULL,
+          usuario_id TEXT,
+          visitor_id TEXT,
+          ip TEXT,
+          fuente TEXT,
+          dispositivo TEXT,
+          duracion INTEGER DEFAULT 0,
+          scroll INTEGER DEFAULT 0,
+          fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE
+        )`
+      },
+      {
+        name: 'reacciones',
+        schema: `CREATE TABLE reacciones_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          noticia_id TEXT NOT NULL,
+          usuario_id TEXT NOT NULL,
+          tipo TEXT NOT NULL,
+          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(noticia_id, usuario_id),
+          FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE,
+          FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+        )`
+      },
+      {
+        name: 'noticia_shares',
+        schema: `CREATE TABLE noticia_shares_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          noticia_id TEXT NOT NULL,
+          plataforma TEXT NOT NULL,
+          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE
+        )`
+      },
+      {
+        name: 'seguidores',
+        schema: `CREATE TABLE seguidores_new (
+          seguidor_id TEXT NOT NULL,
+          autor_id TEXT NOT NULL,
+          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (seguidor_id, autor_id),
+          FOREIGN KEY (seguidor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+          FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE
+        )`
+      },
+      {
+        name: 'notificaciones',
+        schema: `CREATE TABLE notificaciones_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          usuario_id TEXT NOT NULL,
+          mensaje TEXT NOT NULL,
+          tipo TEXT DEFAULT 'info',
+          leida INTEGER DEFAULT 0,
+          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+        )`
+      }
+    ];
+
+    for (const table of tablesToFix) {
+      try {
+        await c.env.DB.exec(table.schema);
+        await c.env.DB.exec(`INSERT INTO ${table.name}_new SELECT * FROM ${table.name};`);
+        await c.env.DB.exec(`DROP TABLE ${table.name};`);
+        await c.env.DB.exec(`ALTER TABLE ${table.name}_new RENAME TO ${table.name};`);
+      } catch (e: any) {
+        console.error(`Error migratory table ${table.name}:`, e.message);
+      }
+    }
+
+    await c.env.DB.exec('PRAGMA foreign_keys = ON;');
+
+    return c.json({ message: 'Foreign Keys actualizadas con CASCADE' });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
   }
 });
 
