@@ -62,7 +62,12 @@ app.get('/api/auth/me', async (c) => {
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
     const payload = await verify(token, secret, 'HS256');
-    const user = await c.env.DB.prepare('SELECT id, email, nombre, rol, foto_perfil, bio FROM usuarios WHERE id = ?').bind(payload.id).first();
+    const user: any = await c.env.DB.prepare('SELECT id, email, nombre, rol, foto_perfil, bio FROM usuarios WHERE id = ?').bind(payload.id).first();
+    // Special check for the admin email to ensure role is updated if needed
+    if (user && user.email === 'brahiangonzalez300@gmail.com' && user.rol !== 'admin') {
+      await c.env.DB.prepare('UPDATE usuarios SET rol = "admin" WHERE id = ?').bind(user.id).run();
+      user.rol = 'admin';
+    }
     return c.json(user || null);
   } catch (err) {
     return c.json(null);
@@ -122,12 +127,14 @@ app.post('/api/auth/registro', async (c) => {
 
     const id = crypto.randomUUID();
     
-    // Default role 'suscriptor'
+    // Default role: if email is brahiangonzalez300@gmail.com, set as admin
+    const rol = email === 'brahiangonzalez300@gmail.com' ? 'admin' : 'suscriptor';
+    
     await c.env.DB.prepare(
       'INSERT INTO usuarios (id, email, password_hash, nombre, rol) VALUES (?, ?, ?, ?, ?)'
-    ).bind(id, email, password, nombre, 'suscriptor').run();
+    ).bind(id, email, password, nombre, rol).run();
 
-    return c.json({ id, email, nombre, rol: 'suscriptor' }, 201);
+    return c.json({ id, email, nombre, rol }, 201);
   } catch (error: any) {
     console.error('Registration Error:', error);
     if (error.message.includes('UNIQUE constraint failed')) {
@@ -166,11 +173,12 @@ app.post('/api/auth/solicitar-autor', async (c) => {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
     const payload = await verify(token, secret, 'HS256');
     
-    const { motivo } = await c.req.json();
+    const body = await c.req.json().catch(() => ({}));
+    const motivo = body.motivo || '';
 
     await c.env.DB.prepare(
       'INSERT INTO solicitudes_autor (usuario_id, motivo) VALUES (?, ?)'
-    ).bind(payload.id, motivo || '').run();
+    ).bind(payload.id, motivo).run();
 
     return c.json({ message: 'Solicitud enviada correctamente' });
   } catch (error: any) {
@@ -267,11 +275,18 @@ app.post('/api/auth/google', async (c) => {
     if (!user) {
       // Crear usuario si no existe
       const id = crypto.randomUUID();
+      // Assign admin role if email matches
+      const rol = email === 'brahiangonzalez300@gmail.com' ? 'admin' : 'suscriptor';
+      
       await c.env.DB.prepare(
         'INSERT INTO usuarios (id, email, password_hash, nombre, foto_perfil, rol) VALUES (?, ?, ?, ?, ?, ?)'
-      ).bind(id, email, 'google-auth-' + google_id, name, picture, 'autor').run();
+      ).bind(id, email, 'google-auth-' + google_id, name, picture, rol).run();
       
       user = await c.env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first();
+    } else if (email === 'brahiangonzalez300@gmail.com' && user.rol !== 'admin') {
+      // Ensure existing user with this email becomes admin
+      await c.env.DB.prepare('UPDATE usuarios SET rol = "admin" WHERE id = ?').bind(user.id).run();
+      user.rol = 'admin';
     }
 
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
@@ -443,7 +458,13 @@ app.post('/api/admin/solicitudes/:id', async (c) => {
 
     const { accion } = await c.req.json(); // 'aprobar' o 'rechazar'
     
-    const solicitud: any = await c.env.DB.prepare('SELECT usuario_id FROM solicitudes_autor WHERE id = ?').bind(requestId).first();
+    const solicitud: any = await c.env.DB.prepare(`
+      SELECT s.usuario_id, u.email, u.nombre 
+      FROM solicitudes_autor s 
+      JOIN usuarios u ON s.usuario_id = u.id 
+      WHERE s.id = ?
+    `).bind(requestId).first();
+    
     if (!solicitud) return c.json({ error: 'Solicitud no encontrada' }, 404);
 
     if (accion === 'aprobar') {
@@ -451,8 +472,10 @@ app.post('/api/admin/solicitudes/:id', async (c) => {
         c.env.DB.prepare("UPDATE usuarios SET rol = 'autor' WHERE id = ?").bind(solicitud.usuario_id),
         c.env.DB.prepare("UPDATE solicitudes_autor SET estado = 'aprobado' WHERE id = ?").bind(requestId)
       ]);
+      console.log(`[EMAIL SIMULATION] To: ${solicitud.email} - Subject: ¡Felicidades, ya eres autor! - Body: Hola ${solicitud.nombre}, tu solicitud ha sido aprobada.`);
     } else {
       await c.env.DB.prepare("UPDATE solicitudes_autor SET estado = 'rechazado' WHERE id = ?").bind(requestId).run();
+      console.log(`[EMAIL SIMULATION] To: ${solicitud.email} - Subject: Actualización sobre tu solicitud - Body: Hola ${solicitud.nombre}, lamentamos informarte que tu solicitud ha sido rechazada.`);
     }
 
     return c.json({ message: `Solicitud ${accion}ada` });
