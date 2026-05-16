@@ -30,9 +30,11 @@ export default function NewsCard({ noticia, featured = false }: NewsCardProps) {
           referrerPolicy="no-referrer"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-6 md:p-12 flex flex-col justify-end">
-          <Link to={`/?categoria=${noticia.categoria_nombre.toLowerCase()}`} className="self-start bg-red-600 text-white text-xs font-bold px-2 py-1 rounded mb-4 uppercase tracking-widest">
-            {noticia.categoria_nombre}
-          </Link>
+          {noticia.categoria_nombre && (
+            <Link to={`/?categoria=${noticia.categoria_slug || noticia.categoria_nombre.toLowerCase()}`} className="self-start bg-red-600 text-white text-xs font-bold px-2 py-1 rounded mb-4 uppercase tracking-widest">
+              {noticia.categoria_nombre}
+            </Link>
+          )}
           <Link to={`/noticia/${noticia.id}`}>
             <h2 className="font-serif text-3xl md:text-5xl font-bold text-white mb-4 group-hover:text-red-400 transition-colors">
               {noticia.titulo}
@@ -72,9 +74,11 @@ export default function NewsCard({ noticia, featured = false }: NewsCardProps) {
         />
       </Link>
       <div className="flex flex-col gap-2">
-        <Link to={`/?categoria=${noticia.categoria_nombre.toLowerCase()}`} className="text-red-600 text-[10px] font-bold uppercase tracking-widest">
-          {noticia.categoria_nombre}
-        </Link>
+        {noticia.categoria_nombre && (
+          <Link to={`/?categoria=${noticia.categoria_slug || noticia.categoria_nombre.toLowerCase()}`} className="text-red-600 text-[10px] font-bold uppercase tracking-widest">
+            {noticia.categoria_nombre}
+          </Link>
+        )}
         <Link to={`/noticia/${noticia.id}`} className="news-card-title line-clamp-2">
           {noticia.titulo}
         </Link>

@@ -48,9 +48,11 @@ export default function Article() {
           </Link>
 
           <header className="mb-10">
-            <Link to={`/?categoria=${noticia.categoria_nombre.toLowerCase()}`} className="text-red-600 font-bold text-sm uppercase tracking-widest block mb-4">
-              {noticia.categoria_nombre}
-            </Link>
+            {noticia.categoria_nombre && (
+              <Link to={`/?categoria=${noticia.categoria_slug || noticia.categoria_nombre.toLowerCase()}`} className="text-red-600 font-bold text-sm uppercase tracking-widest block mb-4">
+                {noticia.categoria_nombre}
+              </Link>
+            )}
             <h1 className="font-serif text-4xl md:text-6xl font-bold text-gray-900 leading-tight mb-6">
               {noticia.titulo}
             </h1>

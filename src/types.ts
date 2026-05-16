@@ -2,7 +2,7 @@ export interface User {
   id: string;
   email: string;
   nombre: string;
-  rol: 'autor' | 'admin';
+  rol: 'suscriptor' | 'autor' | 'admin';
   foto_perfil?: string;
   bio?: string;
 }
@@ -25,6 +25,7 @@ export interface Noticia {
   imagen_destacada: string;
   categoria_id: number;
   categoria_nombre: string;
+  categoria_slug: string;
   ciudad: string;
   estado: 'borrador' | 'publicado' | 'eliminado';
   destacada: number;

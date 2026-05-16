@@ -6,7 +6,7 @@ async function handleResponse(response: Response) {
     let errorMessage = `Error ${response.status}`;
     try {
       if (contentType && contentType.includes('application/json')) {
-        const error = await response.json();
+        const error = await response.json() as any;
         errorMessage = error.error || error.message || errorMessage;
       } else {
         const text = await response.text();
@@ -47,7 +47,7 @@ export const api = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials)
-      }),
+      }) as any,
     
     register: (data: any): Promise<any> =>
       fetchWithAuth('/api/auth/registro', {
@@ -58,14 +58,28 @@ export const api = {
     
     logout: () => fetchWithAuth('/api/auth/logout', { method: 'POST' }),
     
-    me: (): Promise<User> => fetchWithAuth('/api/auth/me'),
+    me: (): Promise<User> => fetchWithAuth('/api/auth/me') as any,
+
+    updatePerfil: (data: any): Promise<any> =>
+      fetchWithAuth('/api/auth/perfil', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }) as any,
+
+    solicitarAutor: (motivo: string): Promise<any> =>
+      fetchWithAuth('/api/auth/solicitar-autor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo })
+      }) as any,
 
     googleLogin: (credential: string): Promise<User> =>
       fetchWithAuth('/api/auth/google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ credential })
-      }),
+      }) as any,
   },
   
   noticias: {
@@ -77,25 +91,47 @@ export const api = {
         }
       });
       const searchParams = new URLSearchParams(cleanParams);
-      return fetchWithAuth(`/api/noticias?${searchParams}`);
+      return fetchWithAuth(`/api/noticias?${searchParams}`) as any;
     },
     
-    get: (id: string): Promise<Noticia> => fetchWithAuth(`/api/noticias/${id}`),
+    get: (id: string): Promise<Noticia> => fetchWithAuth(`/api/noticias/${id}`) as any,
     
     create: (data: any): Promise<{ id: string }> =>
       fetchWithAuth('/api/noticias', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
-      }),
+      }) as any,
+
+    misNoticias: (): Promise<Noticia[]> => fetchWithAuth('/api/mis-noticias') as any,
+
+    update: (id: string, data: any): Promise<any> =>
+      fetchWithAuth(`/api/noticias/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }) as any,
+
+    delete: (id: string): Promise<any> =>
+      fetchWithAuth(`/api/noticias/${id}`, { method: 'DELETE' }) as any,
+  },
+  
+  admin: {
+    listSolicitudes: (): Promise<any[]> => fetchWithAuth('/api/admin/solicitudes') as any,
+    handleSolicitud: (id: number, accion: 'aprobar' | 'rechazar'): Promise<any> =>
+      fetchWithAuth(`/api/admin/solicitudes/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion })
+      }) as any,
   },
   
   categorias: {
-    list: (): Promise<Categoria[]> => fetchWithAuth('/api/categorias'),
+    list: (): Promise<Categoria[]> => fetchWithAuth('/api/categorias') as any,
   },
   
   metricas: {
-    get: (): Promise<Metrica[]> => fetchWithAuth('/api/metricas'),
+    get: (): Promise<Metrica[]> => fetchWithAuth('/api/metricas') as any,
   },
   
   upload: (file: File): Promise<{ url: string }> => {
@@ -104,6 +140,6 @@ export const api = {
     return fetchWithAuth('/api/upload', {
       method: 'POST',
       body: formData
-    });
+    }) as any;
   }
 };

@@ -108,7 +108,7 @@ export default function App() {
             <Route path="/noticia/:id" element={<Article />} />
             <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login onLogin={setUser} />} />
             <Route path="/registro" element={user ? <Navigate to="/dashboard" /> : <Register />} />
-            <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
+            <Route path="/dashboard" element={user ? <Dashboard user={user} onUserUpdate={setUser} /> : <Navigate to="/login" />} />
           </Routes>
         </div>
 

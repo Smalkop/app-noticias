@@ -122,18 +122,62 @@ app.post('/api/auth/registro', async (c) => {
 
     const id = crypto.randomUUID();
     
-    // El esquema de setup_d1.sql no tiene 'activo', lo removemos o lo agregamos al SQL
+    // Default role 'suscriptor'
     await c.env.DB.prepare(
       'INSERT INTO usuarios (id, email, password_hash, nombre, rol) VALUES (?, ?, ?, ?, ?)'
-    ).bind(id, email, password, nombre, 'autor').run();
+    ).bind(id, email, password, nombre, 'suscriptor').run();
 
-    return c.json({ id, email, nombre }, 201);
+    return c.json({ id, email, nombre, rol: 'suscriptor' }, 201);
   } catch (error: any) {
     console.error('Registration Error:', error);
     if (error.message.includes('UNIQUE constraint failed')) {
       return c.json({ error: 'El email ya está registrado' }, 400);
     }
     return c.json({ error: 'Error al registrar usuario', details: error.message }, 400);
+  }
+});
+
+// Perfil: Update
+app.put('/api/auth/perfil', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    const { nombre, bio, foto_perfil } = await c.req.json();
+
+    await c.env.DB.prepare(
+      'UPDATE usuarios SET nombre = ?, bio = ?, foto_perfil = ? WHERE id = ?'
+    ).bind(nombre, bio, foto_perfil, payload.id).run();
+
+    return c.json({ message: 'Perfil actualizado' });
+  } catch (error: any) {
+    return c.json({ error: 'Error al actualizar perfil', details: error.message }, 500);
+  }
+});
+
+// Autor: Solicitar ser autor
+app.post('/api/auth/solicitar-autor', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    
+    const { motivo } = await c.req.json();
+
+    await c.env.DB.prepare(
+      'INSERT INTO solicitudes_autor (usuario_id, motivo) VALUES (?, ?)'
+    ).bind(payload.id, motivo || '').run();
+
+    return c.json({ message: 'Solicitud enviada correctamente' });
+  } catch (error: any) {
+    if (error.message.includes('UNIQUE constraint failed')) {
+      return c.json({ error: 'Ya tienes una solicitud pendiente' }, 400);
+    }
+    return c.json({ error: 'Error al enviar solicitud', details: error.message }, 500);
   }
 });
 
@@ -146,10 +190,18 @@ app.get('/api/setup-db', async (c) => {
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT,
         nombre TEXT NOT NULL,
-        rol TEXT DEFAULT 'autor',
+        rol TEXT DEFAULT 'suscriptor',
         foto_perfil TEXT,
         bio TEXT,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`),
+      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS solicitudes_autor (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario_id TEXT UNIQUE NOT NULL,
+        motivo TEXT,
+        estado TEXT DEFAULT 'pendiente',
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
       )`),
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS categorias (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -185,7 +237,7 @@ app.get('/api/setup-db', async (c) => {
         ('Política', 'politica'),
         ('Economía', 'economia'),
         ('Deportes', 'deportes'),
-        ('Cultura', 'cultura'),
+        ('Cultura', 'culture'),
         ('Tecnología', 'tecnologia'),
         ('Internacional', 'internacional')`)
     ]);
@@ -299,6 +351,139 @@ app.post('/api/noticias', async (c) => {
   }
 });
 
+// Noticias: Update
+app.put('/api/noticias/:id', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  const newsId = c.req.param('id');
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+
+    const body = await c.req.json();
+    const { titulo, subtitulo, contenido, categoria_id, imagen_destacada, estado } = body;
+
+    // Verificar propiedad o admin
+    const existing: any = await c.env.DB.prepare('SELECT autor_id FROM noticias WHERE id = ?').bind(newsId).first();
+    if (!existing) return c.json({ error: 'Noticia no encontrada' }, 404);
+    if (existing.autor_id !== payload.id && payload.rol !== 'admin') {
+      return c.json({ error: 'No tienes permiso para editar esta noticia' }, 403);
+    }
+
+    const now = new Date().toISOString();
+    await c.env.DB.prepare(`
+      UPDATE noticias 
+      SET titulo = ?, subtitulo = ?, contenido = ?, categoria_id = ?, imagen_destacada = ?, estado = ?, actualizado_en = ?
+      WHERE id = ?
+    `).bind(titulo, subtitulo, contenido, categoria_id, imagen_destacada, estado, now, newsId).run();
+
+    return c.json({ message: 'Noticia actualizada correctamente' });
+  } catch (error: any) {
+    return c.json({ error: 'Error al actualizar noticia', details: error.message }, 500);
+  }
+});
+
+// Noticias: Delete
+app.delete('/api/noticias/:id', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  const newsId = c.req.param('id');
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+
+    // Verificar propiedad o admin
+    const existing: any = await c.env.DB.prepare('SELECT autor_id FROM noticias WHERE id = ?').bind(newsId).first();
+    if (!existing) return c.json({ error: 'Noticia no encontrada' }, 404);
+    if (existing.autor_id !== payload.id && payload.rol !== 'admin') {
+      return c.json({ error: 'No tienes permiso para eliminar esta noticia' }, 403);
+    }
+
+    await c.env.DB.prepare('DELETE FROM noticias WHERE id = ?').bind(newsId).run();
+    return c.json({ message: 'Noticia eliminada correctamente' });
+  } catch (error: any) {
+    return c.json({ error: 'Error al eliminar noticia', details: error.message }, 500);
+  }
+});
+
+// Admin: List Requests
+app.get('/api/admin/solicitudes', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT s.*, u.nombre, u.email 
+      FROM solicitudes_autor s 
+      JOIN usuarios u ON s.usuario_id = u.id 
+      WHERE s.estado = 'pendiente'
+    `).all();
+    return c.json(results || []);
+  } catch (error: any) {
+    return c.json({ error: 'Error al obtener solicitudes', details: error.message }, 500);
+  }
+});
+
+// Admin: Handle Request
+app.post('/api/admin/solicitudes/:id', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  const requestId = c.req.param('id');
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    const { accion } = await c.req.json(); // 'aprobar' o 'rechazar'
+    
+    const solicitud: any = await c.env.DB.prepare('SELECT usuario_id FROM solicitudes_autor WHERE id = ?').bind(requestId).first();
+    if (!solicitud) return c.json({ error: 'Solicitud no encontrada' }, 404);
+
+    if (accion === 'aprobar') {
+      await c.env.DB.batch([
+        c.env.DB.prepare("UPDATE usuarios SET rol = 'autor' WHERE id = ?").bind(solicitud.usuario_id),
+        c.env.DB.prepare("UPDATE solicitudes_autor SET estado = 'aprobado' WHERE id = ?").bind(requestId)
+      ]);
+    } else {
+      await c.env.DB.prepare("UPDATE solicitudes_autor SET estado = 'rechazado' WHERE id = ?").bind(requestId).run();
+    }
+
+    return c.json({ message: `Solicitud ${accion}ada` });
+  } catch (error: any) {
+    return c.json({ error: 'Error al procesar solicitud', details: error.message }, 500);
+  }
+});
+
+// Noticias: Mis Noticias (for dashboard)
+app.get('/api/mis-noticias', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT n.*, c.nombre as categoria_nombre 
+      FROM noticias n 
+      JOIN categorias c ON n.categoria_id = c.id 
+      WHERE n.autor_id = ? 
+      ORDER BY n.creado_en DESC
+    `).bind(payload.id).all();
+
+    return c.json(results || []);
+  } catch (error: any) {
+    return c.json({ error: 'Error al obtener mis noticias', details: error.message }, 500);
+  }
+});
+
 // Noticias: List
 app.get('/api/noticias', async (c) => {
   try {
@@ -308,7 +493,7 @@ app.get('/api/noticias', async (c) => {
     const offset = parseInt(c.req.query('offset') || '0');
 
     let query = `
-      SELECT n.*, u.nombre as autor_nombre, c.nombre as categoria_nombre 
+      SELECT n.*, u.nombre as autor_nombre, c.nombre as categoria_nombre, c.slug as categoria_slug 
       FROM noticias n 
       JOIN usuarios u ON n.autor_id = u.id 
       JOIN categorias c ON n.categoria_id = c.id 
@@ -341,7 +526,7 @@ app.get('/api/noticias/:id', async (c) => {
   const id = c.req.param('id');
   try {
     const noticia: any = await c.env.DB.prepare(
-      'SELECT n.*, u.nombre as autor_nombre, u.bio as autor_bio, c.nombre as categoria_nombre FROM noticias n JOIN usuarios u ON n.autor_id = u.id JOIN categorias c ON n.categoria_id = c.id WHERE n.id = ?'
+      'SELECT n.*, u.nombre as autor_nombre, u.bio as autor_bio, c.nombre as categoria_nombre, c.slug as categoria_slug FROM noticias n JOIN usuarios u ON n.autor_id = u.id JOIN categorias c ON n.categoria_id = c.id WHERE n.id = ?'
     ).bind(id).first();
 
     if (noticia) {
