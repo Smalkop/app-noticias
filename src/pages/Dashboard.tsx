@@ -29,10 +29,15 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   const [seguidores, setSeguidores] = useState<Seguidor[]>([]);
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'metrics' | 'create' | 'manage' | 'profile' | 'admin' | 'notifications'>('metrics');
+  const [activeTab, setActiveTab] = useState<'metrics' | 'create' | 'manage' | 'profile' | 'admin' | 'notifications' | 'users'>('metrics');
   const [metricPeriod, setMetricPeriod] = useState('mes');
   const [selectedMetrica, setSelectedMetrica] = useState<Metrica | null>(null);
   const [selectedNoticiaId, setSelectedNoticiaId] = useState<string | null>(null);
+
+  // User Management State
+  const [searchEmail, setSearchEmail] = useState('');
+  const [foundUsers, setFoundUsers] = useState<User[]>([]);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   // Form state for News
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -282,6 +287,55 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
     }
   };
 
+  const handleSearchUsers = async () => {
+    if (!searchEmail) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/usuarios/buscar?email=${searchEmail}`);
+      const data = await res.json();
+      setFoundUsers(Array.isArray(data) ? data : []);
+    } catch (e) {
+      alert('Error buscando usuarios');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateUser = async () => {
+    if (!editingUser) return;
+    try {
+      const res = await fetch(`/api/admin/usuarios/${editingUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingUser)
+      });
+      if (res.ok) {
+        alert('Usuario actualizado');
+        setEditingUser(null);
+        handleSearchUsers();
+      }
+    } catch (e) {
+      alert('Error actualizando usuario');
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar este usuario? Se borrarán todas sus noticias y reacciones (CASCADE).')) return;
+    try {
+      const res = await fetch(`/api/admin/usuarios/${id}`, { method: 'DELETE' });
+      const data: any = await res.json();
+      if (res.ok) {
+        alert('Usuario eliminado');
+        setFoundUsers(foundUsers.filter(u => u.id !== id));
+      } else {
+        alert('Error: ' + (data.error || 'No se pudo eliminar'));
+        if (data.details) console.error(data.details);
+      }
+    } catch (e) {
+      alert('Error eliminando usuario');
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <header className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -328,6 +382,14 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
               onClick={() => setActiveTab('admin')} 
               icon={<Settings className="w-4 h-4" />} 
               label="Verificación" 
+            />
+          )}
+          {user.rol === 'admin' && (
+            <TabButton 
+              active={activeTab === 'users'} 
+              onClick={() => setActiveTab('users')} 
+              icon={<Users className="w-4 h-4" />} 
+              label="Usuarios" 
             />
           )}
           <TabButton 
@@ -1037,7 +1099,142 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
               </div>
             )}
 
-        {activeTab === 'admin' && user.rol === 'admin' && (
+            {activeTab === 'users' && user.rol === 'admin' && (
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
+                  <h3 className="text-xl font-bold flex items-center gap-2 mb-6">
+                    <Users className="w-5 h-5 text-red-600" /> Gestión de Usuarios
+                  </h3>
+                  
+                  <div className="flex gap-4 mb-8">
+                    <input 
+                      type="text"
+                      placeholder="Buscar por correo..."
+                      value={searchEmail}
+                      onChange={(e) => setSearchEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSearchUsers()}
+                      className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none"
+                    />
+                    <button 
+                      onClick={handleSearchUsers}
+                      className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700 transition-all flex items-center gap-2"
+                    >
+                      <ArrowUpRight className="w-5 h-5 rotate-45" /> Buscar
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {foundUsers.map(u => (
+                      <div key={u.id} className="p-4 border border-gray-50 rounded-xl bg-gray-50/50 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-bold">
+                            {u.nombre.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-900">{u.nombre}</p>
+                            <p className="text-xs text-gray-500">{u.email} • {u.rol}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setEditingUser(u)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            <Edit className="w-5 h-5" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteUser(u.id)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {searchEmail && foundUsers.length === 0 && !loading && (
+                      <p className="text-center text-gray-400 italic py-4">No se encontraron usuarios.</p>
+                    )}
+                  </div>
+                </div>
+
+                {editingUser && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-white p-8 rounded-2xl border-2 border-red-100 shadow-xl"
+                  >
+                    <h4 className="text-lg font-bold mb-6 flex items-center justify-between">
+                      Editando Usuario: {editingUser.email}
+                      <button onClick={() => setEditingUser(null)} className="text-gray-400 hover:text-gray-900">
+                         <XCircle className="w-5 h-5" />
+                      </button>
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Nombre</label>
+                        <input 
+                          type="text" 
+                          value={editingUser.nombre}
+                          onChange={(e) => setEditingUser({...editingUser, nombre: e.target.value})}
+                          className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Email</label>
+                        <input 
+                          type="email" 
+                          value={editingUser.email}
+                          onChange={(e) => setEditingUser({...editingUser, email: e.target.value})}
+                          className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Rol</label>
+                        <select 
+                          value={editingUser.rol}
+                          onChange={(e) => setEditingUser({...editingUser, rol: e.target.value as any})}
+                          className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg"
+                        >
+                          <option value="suscriptor">Suscriptor</option>
+                          <option value="autor">Autor</option>
+                          <option value="admin">Administrador</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Verificado</label>
+                        <select 
+                          value={editingUser.verificado ? 1 : 0}
+                          onChange={(e) => setEditingUser({...editingUser, verificado: e.target.value === '1'})}
+                          className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg"
+                        >
+                          <option value={1}>Sí</option>
+                          <option value={0}>No</option>
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Teléfono</label>
+                        <input 
+                          type="text" 
+                          value={editingUser.telefono || ''}
+                          onChange={(e) => setEditingUser({...editingUser, telefono: e.target.value})}
+                          className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg"
+                        />
+                      </div>
+                    </div>
+                    
+                    <button 
+                      onClick={handleUpdateUser}
+                      className="w-full bg-gray-900 text-white py-3 mt-8 rounded-xl font-bold hover:bg-black transition-all"
+                    >
+                      Guardar Cambios del Usuario
+                    </button>
+                  </motion.div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'admin' && user.rol === 'admin' && (
           <div className="space-y-8">
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-gray-100">

@@ -747,6 +747,88 @@ app.get('/api/admin/migrar-db', async (c) => {
   }
 });
 
+// Admin: Filtered Users Search
+app.get('/api/admin/usuarios/buscar', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    const email = c.req.query('email');
+    if (!email) return c.json([]);
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT id, email, nombre, rol, verificado, telefono, creado_en 
+      FROM usuarios 
+      WHERE email LIKE ? 
+      LIMIT 10
+    `).bind(`%${email}%`).all();
+
+    return c.json(results || []);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// Admin: Update User
+app.put('/api/admin/usuarios/:id', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  const targetId = c.req.param('id');
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    const { nombre, rol, verificado, telefono, email } = await c.req.json();
+
+    await c.env.DB.prepare(`
+      UPDATE usuarios 
+      SET nombre = COALESCE(?, nombre), 
+          rol = COALESCE(?, rol), 
+          verificado = COALESCE(?, verificado), 
+          telefono = COALESCE(?, telefono),
+          email = COALESCE(?, email)
+      WHERE id = ?
+    `).bind(nombre, rol, verificado, telefono, email, targetId).run();
+
+    return c.json({ message: 'Usuario actualizado' });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// Admin: Delete User (Strict)
+app.delete('/api/admin/usuarios/:id', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  const targetId = c.req.param('id');
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    // Get email before deleting to remove from SendPulse
+    const user: any = await c.env.DB.prepare('SELECT email FROM usuarios WHERE id = ?').bind(targetId).first();
+    if (!user) return c.json({ error: 'Usuario no encontrado' }, 404);
+
+    // Turn on Foreign Keys just in case
+    await c.env.DB.exec('PRAGMA foreign_keys = ON;');
+    
+    await c.env.DB.prepare('DELETE FROM usuarios WHERE id = ?').bind(targetId).run();
+    
+    // Remove from SendPulse
+    c.executionCtx.waitUntil(removeFromSendPulse(c, user.email));
+
+    return c.json({ message: 'Usuario eliminado correctamente' });
+  } catch (err: any) {
+    console.error('Delete User Error:', err.message);
+    return c.json({ error: 'Error al eliminar usuario. Puede que tenga registros vinculados.', details: err.message }, 500);
+  }
+});
+
 // Admin: Fix Foreign Keys (Drop and recreate with CASCADE)
 app.get('/api/admin/fix-cascades', async (c) => {
   const token = getCookie(c, 'token');
@@ -866,8 +948,17 @@ app.get('/api/admin/fix-cascades', async (c) => {
 
     for (const table of tablesToFix) {
       try {
+        // Check if old table exists
+        const exists = await c.env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").bind(table.name).first();
+        if (!exists) continue;
+
         await c.env.DB.exec(table.schema);
-        await c.env.DB.exec(`INSERT INTO ${table.name}_new SELECT * FROM ${table.name};`);
+        
+        // Use batch to ensure they run together or at least identify the column mapping
+        const info: any = await c.env.DB.prepare(`PRAGMA table_info(${table.name})`).all();
+        const columns = info.results.map((r: any) => r.name).join(', ');
+        
+        await c.env.DB.exec(`INSERT INTO ${table.name}_new (${columns}) SELECT ${columns} FROM ${table.name};`);
         await c.env.DB.exec(`DROP TABLE ${table.name};`);
         await c.env.DB.exec(`ALTER TABLE ${table.name}_new RENAME TO ${table.name};`);
       } catch (e: any) {
