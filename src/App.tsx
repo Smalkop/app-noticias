@@ -16,11 +16,11 @@ function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
           <div className="col-span-2">
             <div className="flex items-center gap-2 mb-6">
-              <div className="bg-red-600 text-white px-2 py-1 font-serif font-bold text-xl rounded">PY</div>
-              <span className="font-serif font-bold text-2xl tracking-tighter">Noticias</span>
+              <div className="bg-red-600 text-white px-2 py-1 font-serif font-bold text-xl rounded">LP</div>
+              <span className="font-serif font-bold text-2xl tracking-tighter">Lapacho Post</span>
             </div>
             <p className="text-gray-400 max-w-sm leading-relaxed">
-              El portal de noticias más importante de Paraguay. Información veraz, objetiva y al instante sobre lo que sucede en el país y el mundo.
+              El portal de noticias más importante de la región. Información veraz, objetiva y al instante sobre lo que sucede en el país y el mundo.
             </p>
           </div>
           <div>
@@ -43,7 +43,7 @@ function Footer() {
           </div>
         </div>
         <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
-          <p>© 2024 Noticias PY - Todos los derechos reservados.</p>
+          <p>© 2024 Lapacho Post - Todos los derechos reservados.</p>
           <div className="flex gap-6">
             <a href="#" className="hover:text-white">Términos de uso</a>
             <a href="#" className="hover:text-white">Privacidad</a>
@@ -91,7 +91,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="font-serif font-bold text-gray-500 italic">Noticias PY ...</p>
+          <p className="font-serif font-bold text-gray-500 italic">Lapacho Post ...</p>
         </div>
       </div>
     );

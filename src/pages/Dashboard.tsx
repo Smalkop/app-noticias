@@ -83,8 +83,12 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
         setSolicitudes(solics);
         setAdminPatrocinios(patrocs);
       } else if (activeTab === 'notifications') {
-        const results = await api.notificaciones.list();
-        setNotificaciones(results);
+        const [notics, news] = await Promise.all([
+          api.notificaciones.list(),
+          api.noticias.misNoticias()
+        ]);
+        setNotificaciones(notics);
+        setMisNoticias(news);
         await api.notificaciones.leerTodas();
       }
     } catch (error) {
@@ -869,7 +873,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                 {user.rol === 'suscriptor' && (
                   <div className="bg-red-50 border border-red-100 p-8 rounded-2xl">
                     <h4 className="text-xl font-black text-red-900 mb-2">¿Quieres ser Autor?</h4>
-                    <p className="text-red-700 mb-6">Si te apasiona escribir noticias, solicita convertirte en autor verificado de ParaguayHoy.</p>
+                    <p className="text-red-700 mb-6">Si te apasiona escribir noticias, solicita convertirte en autor verificado de Lapacho Post.</p>
                     
                     {requestSent ? (
                       <div className="bg-white p-6 rounded-xl flex items-center gap-4 text-green-600 font-bold border border-green-100">

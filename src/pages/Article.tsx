@@ -58,7 +58,7 @@ export default function Article({ user }: ArticleProps) {
 
   const handleShare = (platform: 'fb' | 'tw' | 'copy') => {
     const url = window.location.href;
-    const text = noticia?.titulo || 'Mira esta noticia en ParaguayHoy';
+    const text = noticia?.titulo || 'Mira esta noticia en Lapacho Post';
     
     if (platform === 'fb') {
       window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
@@ -114,7 +114,7 @@ export default function Article({ user }: ArticleProps) {
                 </div>
                 <div>
                   <span className="block font-bold text-gray-900">{noticia.autor_nombre}</span>
-                  <span className="text-xs">Redacción Noticias PY</span>
+                  <span className="text-xs">Redacción Lapacho Post</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">

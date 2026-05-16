@@ -19,3 +19,11 @@
 .news-card-title {
   @apply font-serif text-xl font-bold leading-tight hover:text-blue-600 transition-colors;
 }
+
+@utility no-scrollbar {
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

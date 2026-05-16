@@ -30,21 +30,13 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
         <div className="flex justify-between h-16 items-center">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <div className="bg-red-600 text-white px-2 py-1 font-serif font-bold text-xl rounded">PY</div>
-            <span className="font-serif font-bold text-2xl tracking-tighter">Noticias</span>
+            <div className="bg-red-600 text-white px-2 py-1 font-serif font-bold text-xl rounded">LP</div>
+            <span className="font-serif font-bold text-2xl tracking-tighter">Lapacho Post</span>
           </Link>
 
-          {/* Desktop Navigation */}
+          {/* Desktop Navigation (Moved to sub-nav for scrolling) */}
           <div className="hidden md:flex items-center space-x-6">
-            {Array.isArray(categorias) && categorias.slice(0, 5).map((cat) => (
-              <Link 
-                key={cat.id} 
-                to={`/?categoria=${cat.slug}`} 
-                className="text-sm font-medium text-gray-600 hover:text-red-600 transition-colors uppercase tracking-wider"
-              >
-                {cat.nombre}
-              </Link>
-            ))}
+            {/* Logic removed from here, handled in sub-nav below */}
           </div>
 
           {/* Right section */}
@@ -57,7 +49,7 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
             </button>
 
             {user ? (
-              <div className="relative group">
+              <div className="relative group hidden md:block">
                 <button className="flex items-center gap-2 p-1 hover:bg-gray-100 rounded-lg transition-colors">
                   <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
                     {user.foto_perfil ? (
@@ -88,7 +80,7 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
             ) : (
               <Link 
                 to="/login" 
-                className="text-sm font-semibold bg-gray-900 text-white px-4 py-2 rounded hover:bg-gray-800 transition-colors"
+                className="hidden md:block text-sm font-semibold bg-gray-900 text-white px-4 py-2 rounded hover:bg-gray-800 transition-colors"
               >
                 Ingresar
               </Link>
@@ -103,6 +95,114 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
           </div>
         </div>
       </div>
+
+      {/* Category Sub-Nav with Horizontal Scroll */}
+      <div className="border-b border-gray-100 bg-white overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 overflow-x-auto no-scrollbar">
+          <div className="flex items-center space-x-8 h-10 whitespace-nowrap">
+            <Link to="/" className="text-[10px] font-black uppercase text-gray-400 hover:text-red-600 transition-colors">
+              Inicio
+            </Link>
+            {Array.isArray(categorias) && categorias.map((cat) => (
+              <Link 
+                key={cat.id} 
+                to={`/?categoria=${cat.slug}`} 
+                className="text-[10px] font-black uppercase text-gray-900 hover:text-red-600 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {cat.nombre}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Menu Drawer */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMenuOpen(false)}
+              className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            />
+            <motion.div 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              className="fixed top-0 left-0 bottom-0 w-[280px] bg-white z-50 md:hidden flex flex-col"
+            >
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                <Link to="/" className="flex items-center gap-2" onClick={() => setIsMenuOpen(false)}>
+                  <div className="bg-red-600 text-white px-2 py-1 font-serif font-bold text-xl rounded">LP</div>
+                  <span className="font-serif font-bold text-xl tracking-tighter">Lapacho Post</span>
+                </Link>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6">
+                {user && (
+                  <div className="mb-8 p-4 bg-gray-50 rounded-2xl flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
+                      {user.foto_perfil ? (
+                        <img src={user.foto_perfil} className="w-full h-full object-cover" />
+                      ) : (
+                        <UserIcon className="w-full h-full p-2 text-gray-400" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 text-sm truncate">{user.nombre}</p>
+                      <Link to="/dashboard" onClick={() => setIsMenuOpen(false)} className="text-[10px] uppercase font-black text-red-600">Ver Dashboard</Link>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Categorías</h4>
+                    <div className="grid grid-cols-1 gap-2">
+                       {Array.isArray(categorias) && categorias.map(cat => (
+                         <Link 
+                            key={cat.id} 
+                            to={`/?categoria=${cat.slug}`}
+                            className="p-3 text-sm font-bold text-gray-900 hover:bg-red-50 rounded-xl transition-colors"
+                            onClick={() => setIsMenuOpen(false)}
+                         >
+                           {cat.nombre}
+                         </Link>
+                       ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-100">
+                {user ? (
+                  <button 
+                    onClick={() => {
+                        onLogout();
+                        setIsMenuOpen(false);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold text-red-600 bg-red-50 rounded-xl"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Cerrar Sesión
+                  </button>
+                ) : (
+                  <Link 
+                    to="/login" 
+                    onClick={() => setIsMenuOpen(false)}
+                    className="w-full flex items-center justify-center p-3 text-sm font-bold text-white bg-gray-900 rounded-xl"
+                  >
+                    Ingresar a mi cuenta
+                  </Link>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Search Bar Overlay */}
       <AnimatePresence>
