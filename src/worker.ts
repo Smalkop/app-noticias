@@ -557,20 +557,35 @@ app.post('/api/webhook/sendpulse', async (c) => {
     if (contentType.includes('application/json')) {
       body = await c.req.json();
     } else {
-      // Handle URL encoded or form data
       body = await c.req.parseBody();
     }
 
     console.log('SendPulse Webhook Received:', JSON.stringify(body));
     
+    // SendPulse can send an array or a single object
     const events = Array.isArray(body) ? body : [body];
     
     for (const event of events) {
-      const email = event.email || event[0]?.email; // Some webhooks nested
+      // SendPulse events often have the email at the top level or inside a nested structure
+      const email = event.email || (event.data && event.data.email) || event.variable?.find?.((v: any) => v.name === 'email')?.value;
+      
       if (email) {
-        await c.env.DB.prepare('UPDATE usuarios SET verificado = 1 WHERE email = ?')
+        // Find user and update
+        const result = await c.env.DB.prepare('UPDATE usuarios SET verificado = 1 WHERE email = ?')
           .bind(email).run();
-        console.log(`Usuario verificado vía webhook: ${email}`);
+        
+        if (result.meta.changes > 0) {
+          console.log(`Usuario verificado vía webhook: ${email}`);
+          
+          // Also create a notification for the user
+          const user: any = await c.env.DB.prepare('SELECT id FROM usuarios WHERE email = ?').bind(email).first();
+          if (user) {
+            await c.env.DB.prepare(`
+              INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, leida)
+              VALUES (?, ?, ?, ?, 0)
+            `).bind(user.id, '¡Cuenta Verificada!', 'Tu correo electrónico ha sido verificado con éxito.', 'sistema').run();
+          }
+        }
       }
     }
     return c.json({ ok: true });
@@ -1068,7 +1083,7 @@ app.get('/api/admin/test-sendpulse', async (c) => {
   if (!token) return c.json({ error: 'No autorizado' }, 401);
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-    const payload = await verify(token, secret, 'HS256');
+    const payload = await verify(token, secret, 'HS256') as any;
     if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
 
     const email = payload.email; // Test with current admin email

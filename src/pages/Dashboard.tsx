@@ -1260,6 +1260,34 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-gray-100">
                 <h3 className="text-xl font-bold flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-red-600" /> Configuración de Webhook (SendPulse)
+                </h3>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-600">
+                  Copia esta URL y pégala en tu panel de SendPulse (Ajustes de cuenta → API → Webhooks → "Suscribirse" o "Añadir correo") 
+                  para que la verificación de usuarios sea automática cuando confirmen su correo.
+                </p>
+                <div className="bg-gray-100 p-4 rounded-xl flex items-center justify-between gap-4">
+                  <code className="text-xs font-mono text-gray-800 break-all">
+                    https://noticias.brahian.dev/api/webhook/sendpulse
+                  </code>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText('https://noticias.brahian.dev/api/webhook/sendpulse');
+                      alert('URL copiada al portapapeles');
+                    }}
+                    className="bg-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm border border-gray-200 hover:bg-gray-50 transition-all shrink-0"
+                  >
+                    Copiar
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <h3 className="text-xl font-bold flex items-center gap-2">
                   <Database className="w-5 h-5 text-red-600" /> Mantenimiento de Base de Datos
                 </h3>
               </div>
