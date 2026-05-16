@@ -25,6 +25,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'metrics' | 'create' | 'manage' | 'profile' | 'admin' | 'notifications'>('metrics');
   const [metricPeriod, setMetricPeriod] = useState('mes');
+  const [selectedNoticiaId, setSelectedNoticiaId] = useState<string | null>(null);
 
   // Form state for News
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -33,6 +34,15 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   const [contenido, setContenido] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
   const [imagenUrl, setImagenUrl] = useState('');
+  
+  // Sponsorship state
+  const [patrocinada, setPatrocinada] = useState(false);
+  const [patrocinioMonto, setPatrocinioMonto] = useState('');
+  const [patrocinioMarca, setPatrocinioMarca] = useState('');
+  const [patrocinioRUC, setPatrocinioRUC] = useState('');
+  const [showBankDetails, setShowBankDetails] = useState(false);
+  const [adminPatrocinios, setAdminPatrocinios] = useState<any[]>([]);
+
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState('');
 
@@ -53,7 +63,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
     setLoading(true);
     try {
       if (activeTab === 'metrics') {
-        const results = await api.metricas.get(metricPeriod);
+        const results = await api.metricas.get(metricPeriod, selectedNoticiaId || undefined);
         setMetricas(results);
         if (user.rol === 'autor' || user.rol === 'admin') {
           const follows = await api.seguidores.misSeguidores();
@@ -66,8 +76,12 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
         const results = await api.categorias.list();
         setCategorias(results);
       } else if (activeTab === 'admin' && user.rol === 'admin') {
-        const results = await api.admin.listSolicitudes();
-        setSolicitudes(results);
+        const [solics, patrocs] = await Promise.all([
+          api.admin.listSolicitudes(),
+          api.admin.listPatrocinios()
+        ]);
+        setSolicitudes(solics);
+        setAdminPatrocinios(patrocs);
       } else if (activeTab === 'notifications') {
         const results = await api.notificaciones.list();
         setNotificaciones(results);
@@ -84,7 +98,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
     if (activeTab === 'metrics') {
       loadData();
     }
-  }, [metricPeriod]);
+  }, [metricPeriod, selectedNoticiaId]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'news' | 'profile' = 'news') => {
     const file = e.target.files?.[0];
@@ -125,7 +139,11 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
         contenido,
         categoria_id: Number(categoriaId),
         imagen_destacada: imagenUrl,
-        estado: 'publicado'
+        estado: 'publicado',
+        patrocinada,
+        patrocinio_monto: patrocinada ? Number(patrocinioMonto) : undefined,
+        patrocinio_marca: patrocinada ? patrocinioMarca : undefined,
+        patrocinio_ruc: patrocinada ? patrocinioRUC : undefined,
       };
 
       if (editingId) {
@@ -133,24 +151,50 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
         setSuccess('¡Noticia actualizada correctamente!');
       } else {
         await api.noticias.create(data);
-        setSuccess('¡Noticia publicada con éxito!');
+        if (patrocinada) {
+          setShowBankDetails(true);
+        } else {
+          setSuccess('¡Noticia publicada con éxito!');
+        }
       }
 
-      // Reset form
-      setEditingId(null);
-      setTitulo('');
-      setSubtitulo('');
-      setContenido('');
-      setImagenUrl('');
-      setCategoriaId('');
-      
-      setTimeout(() => {
-        setSuccess('');
-        setActiveTab('manage');
-      }, 2000);
+      if (!patrocinada || editingId) {
+        // Reset form
+        setEditingId(null);
+        setTitulo('');
+        setSubtitulo('');
+        setContenido('');
+        setImagenUrl('');
+        setCategoriaId('');
+        setPatrocinada(false);
+        setPatrocinioMonto('');
+        setPatrocinioMarca('');
+        setPatrocinioRUC('');
+        
+        setTimeout(() => {
+          setSuccess('');
+          setActiveTab('manage');
+        }, 2000);
+      }
     } catch (error) {
       alert('Error al guardar noticia');
     }
+  };
+
+  const handleCloseBankDetails = () => {
+    setShowBankDetails(false);
+    // Final reset
+    setEditingId(null);
+    setTitulo('');
+    setSubtitulo('');
+    setContenido('');
+    setImagenUrl('');
+    setCategoriaId('');
+    setPatrocinada(false);
+    setPatrocinioMonto('');
+    setPatrocinioMarca('');
+    setPatrocinioRUC('');
+    setActiveTab('manage');
   };
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
@@ -205,6 +249,10 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
     setContenido(noticia.contenido);
     setCategoriaId(String(noticia.categoria_id));
     setImagenUrl(noticia.imagen_destacada || '');
+    setPatrocinada(!!noticia.patrocinada);
+    setPatrocinioMonto(noticia.patrocinio_monto ? String(noticia.patrocinio_monto) : '');
+    setPatrocinioMarca(noticia.patrocinio_marca || '');
+    setPatrocinioRUC(noticia.patrocinio_ruc || '');
     setActiveTab('create');
   };
 
@@ -299,23 +347,42 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                   <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between mb-8">
                       <h3 className="text-xl font-bold flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-red-600" /> Noticias más leídas
+                        <FileText className="w-5 h-5 text-red-600" /> 
+                        {selectedNoticiaId ? 'Estadísticas de Noticia' : 'Noticias más leídas'}
                       </h3>
-                      <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
-                        {['dia', 'mes', 'año'].map((p) => (
+                      <div className="flex items-center gap-4">
+                        {selectedNoticiaId && (
                           <button 
-                            key={p}
-                            onClick={() => setMetricPeriod(p)}
-                            className={`px-3 py-1 text-xs font-bold rounded-md transition-all capitalize ${metricPeriod === p ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                            onClick={() => setSelectedNoticiaId(null)}
+                            className="text-xs font-bold text-gray-500 hover:text-red-600 transition-colors"
                           >
-                            {p}
+                            Volver al ranking
                           </button>
-                        ))}
+                        )}
+                        <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
+                          {['dia', 'mes', 'año'].map((p) => (
+                            <button 
+                              key={p}
+                              onClick={() => setMetricPeriod(p)}
+                              className={`px-3 py-1 text-xs font-bold rounded-md transition-all capitalize ${metricPeriod === p ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                     <div className="space-y-6">
                       {Array.isArray(metricas) && metricas.length > 0 ? metricas.map((m, i) => (
-                        <div key={i} className="flex items-center gap-4">
+                        <div 
+                          key={i} 
+                          className={`flex items-center gap-4 ${!selectedNoticiaId ? 'cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition-colors' : ''}`}
+                          onClick={() => {
+                            if (!selectedNoticiaId && (m as any).id) {
+                              setSelectedNoticiaId((m as any).id);
+                            }
+                          }}
+                        >
                           <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-400 text-xs">
                             {i + 1}
                           </div>
@@ -414,6 +481,56 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                     <Bell className="w-5 h-5 text-red-600" /> Centro de Notificaciones
                   </h3>
                 </div>
+                
+                {misNoticias.filter(n => n.patrocinada && n.patrocinio_estado !== 'aceptado').length > 0 && (
+                  <div className="bg-red-50 p-6 border-b border-red-100">
+                    <h4 className="text-sm font-black text-red-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <FileText className="w-4 h-4" /> Pendientes de Comprobante
+                    </h4>
+                    <div className="space-y-3">
+                      {misNoticias.filter(n => n.patrocinada && n.patrocinio_estado !== 'aceptado').map(n => (
+                        <div key={n.id} className="bg-white p-4 rounded-xl border border-red-100 flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-gray-900 line-clamp-1 truncate">{n.titulo}</p>
+                            <p className="text-xs text-gray-500">{n.patrocinio_marca} • Gs. {Number(n.patrocinio_monto).toLocaleString()}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className={`text-[10px] font-black uppercase px-2 py-1 rounded bg-gray-100 ${
+                              n.patrocinio_estado === 'rechazado' ? 'text-red-600' : 'text-gray-500'
+                            }`}>
+                              {n.patrocinio_estado}
+                            </span>
+                            <label className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer hover:bg-red-700 transition-colors">
+                              <input 
+                                type="file" 
+                                className="hidden" 
+                                accept="image/*,application/pdf"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  setUploading(true);
+                                  try {
+                                    const { url } = await api.upload(file);
+                                    await api.noticias.subirComprobante(n.id, url);
+                                    setSuccess('Comprobante enviado para revisión');
+                                    loadData();
+                                    setTimeout(() => setSuccess(''), 3000);
+                                  } catch (err) {
+                                    alert('Error al subir comprobante');
+                                  } finally {
+                                    setUploading(false);
+                                  }
+                                }}
+                              />
+                              {n.patrocinio_comprobante ? 'Cambiar Comprobante' : 'Subir Comprobante'}
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="divide-y divide-gray-50">
                   {notificaciones.length > 0 ? notificaciones.map((n) => (
                     <div key={n.id} className={`p-6 flex gap-4 hover:bg-gray-50 transition-colors ${!n.leida ? 'bg-red-50/30' : ''}`}>
@@ -463,6 +580,15 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                             <span className={`px-2 py-0.5 rounded font-bold capitalize ${n.estado === 'publicado' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>
                               {n.estado}
                             </span>
+                            {n.patrocinada === 1 && (
+                              <span className={`px-2 py-0.5 rounded font-bold text-[10px] uppercase tracking-wider ${
+                                n.patrocinio_estado === 'aceptado' ? 'bg-blue-100 text-blue-700' :
+                                n.patrocinio_estado === 'rechazado' ? 'bg-red-100 text-red-700' :
+                                n.patrocinio_estado === 'en revision' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {n.patrocinio_marca}: {n.patrocinio_estado}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -570,6 +696,61 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                         placeholder="Escribe aquí el contenido completo..."
                       ></textarea>
                     </div>
+
+                    <div className="md:col-span-2 space-y-4 pt-4 border-t border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <input 
+                          type="checkbox" 
+                          id="patrocinada"
+                          checked={patrocinada}
+                          onChange={(e) => setPatrocinada(e.target.checked)}
+                          className="w-5 h-5 rounded text-red-600 focus:ring-red-500"
+                        />
+                        <label htmlFor="patrocinada" className="font-bold text-gray-900 cursor-pointer">Activar Patrocinio (Publicidad)</label>
+                      </div>
+
+                      {patrocinada && (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-red-50/50 p-6 rounded-2xl border border-red-100"
+                        >
+                          <div>
+                            <label className="block text-xs font-black text-red-800 uppercase mb-2">Monto (Gs)</label>
+                            <input 
+                              type="number"
+                              required={patrocinada}
+                              value={patrocinioMonto}
+                              onChange={(e) => setPatrocinioMonto(e.target.value)}
+                              className="w-full px-4 py-2 bg-white border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                              placeholder="Ej: 500000"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-black text-red-800 uppercase mb-2">Marca Patrocinadora</label>
+                            <input 
+                              type="text"
+                              required={patrocinada}
+                              value={patrocinioMarca}
+                              onChange={(e) => setPatrocinioMarca(e.target.value)}
+                              className="w-full px-4 py-2 bg-white border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                              placeholder="Ej: Coca Cola"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-black text-red-800 uppercase mb-2">RUC de la empresa</label>
+                            <input 
+                              type="text"
+                              required={patrocinada}
+                              value={patrocinioRUC}
+                              onChange={(e) => setPatrocinioRUC(e.target.value)}
+                              className="w-full px-4 py-2 bg-white border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                              placeholder="Ej: 80012345-6"
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
                   </div>
 
                   <button 
@@ -653,6 +834,38 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                   </button>
                 </form>
 
+                {(user.rol === 'autor' || user.rol === 'admin') && (
+                  <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
+                    <h3 className="text-xl font-bold mb-6 flex items-center justify-between">
+                      Mis Seguidores
+                      <span className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-sm">{seguidores.length} suscriptores</span>
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {seguidores.length > 0 ? seguidores.map((s) => (
+                        <div key={s.seguidor_id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                          <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200">
+                            {s.seguidor_foto ? (
+                              <img src={s.seguidor_foto} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                <UserIcon className="w-5 h-5" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-gray-900 text-sm truncate">{s.seguidor_nombre}</p>
+                            <p className="text-[10px] text-gray-400 uppercase font-black">Siguiendo desde {new Date(s.creado_en).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="col-span-2 text-center py-8 text-gray-400 italic">
+                          Aún no tienes suscriptores. ¡Sigue publicando contenido de calidad!
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {user.rol === 'suscriptor' && (
                   <div className="bg-red-50 border border-red-100 p-8 rounded-2xl">
                     <h4 className="text-xl font-black text-red-900 mb-2">¿Quieres ser Autor?</h4>
@@ -685,51 +898,176 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
               </div>
             )}
 
-            {activeTab === 'admin' && user.rol === 'admin' && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-gray-100">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 text-red-600" /> Solicitudes de Autor Pendientes
-                  </h3>
+        {activeTab === 'admin' && user.rol === 'admin' && (
+          <div className="space-y-8">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-600" /> Solicitudes de Autor Pendientes
+                </h3>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {solicitudes.length > 0 ? solicitudes.map((s) => (
+                  <div key={s.id} className="p-8 space-y-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-bold text-lg text-gray-900">{s.nombre}</p>
+                        <p className="text-gray-500 text-sm">{s.email}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleAdminSolicitud(s.id, 'aprobar')}
+                          className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-700 flex items-center gap-2"
+                        >
+                          <CheckCircle className="w-4 h-4" /> Aprobar
+                        </button>
+                        <button 
+                          onClick={() => handleAdminSolicitud(s.id, 'rechazar')}
+                          className="bg-gray-200 text-gray-600 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-300 flex items-center gap-2"
+                        >
+                          <XCircle className="w-4 h-4" /> Rechazar
+                        </button>
+                      </div>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl border border-gray-200 italic text-gray-600">
+                      "{s.motivo || 'Sin motivo especificado'}"
+                    </div>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Solicitado el {new Date(s.creado_en).toLocaleDateString()}</p>
+                  </div>
+                )) : (
+                  <div className="p-8 text-center text-gray-400 italic">No hay solicitudes pendientes.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-red-600" /> Solicitudes de Patrocinio
+                </h3>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {adminPatrocinios.length > 0 ? adminPatrocinios.map((p) => (
+                  <div key={p.id} className="p-6 hover:bg-gray-50 transition-colors">
+                    <div className="flex justify-between items-center mb-4">
+                      <div>
+                        <h4 className="font-bold text-gray-900">{p.titulo}</h4>
+                        <p className="text-xs text-gray-500">Por: {p.autor_nombre} • {p.patrocinio_marca} (Gs. {Number(p.patrocinio_monto).toLocaleString()})</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {['pendiente', 'en revision', 'aceptado', 'rechazado', 'envie otra'].map(est => (
+                          <button 
+                            key={est}
+                            onClick={async () => {
+                              await api.admin.handlePatrocinio(p.id, est);
+                              loadData();
+                            }}
+                            className={`px-3 py-1 text-[10px] font-black rounded uppercase tracking-wider transition-all ${
+                              p.patrocinio_estado === est 
+                                ? (est === 'aceptado' ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white') 
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                            }`}
+                          >
+                            {est}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {p.patrocinio_comprobante && (
+                      <a 
+                        href={p.patrocinio_comprobante} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 text-xs font-bold text-red-600 hover:underline"
+                      >
+                        Ver Comprobante Adjunto <FileText className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                )) : (
+                  <div className="p-8 text-center text-gray-400 italic">No hay patrocinios registrados.</div>
+                )}
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-gray-900">Mantenimiento de Sistema</h4>
+                <p className="text-sm text-gray-500">Asegúrate de que la base de datos tenga las últimas columnas añadidas.</p>
+              </div>
+              <button 
+                onClick={async () => {
+                  try {
+                    await api.admin.migrarDB();
+                    alert('Migración exitosa');
+                  } catch (e) {
+                    alert('Error en migración');
+                  }
+                }}
+                className="bg-gray-900 text-white px-6 py-2 rounded-xl font-bold hover:bg-black transition-all shadow-sm"
+              >
+                Migrar Base de Datos
+              </button>
+            </div>
+          </div>
+        )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      <AnimatePresence>
+        {showBankDetails && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6"
+            >
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto">
+                <CheckCircle className="w-8 h-8" />
+              </div>
+              <div className="text-center">
+                <h3 className="text-2xl font-serif font-bold text-gray-900 mb-2">¡Solicitud de Patrocinio Guardada!</h3>
+                <p className="text-gray-500">Para activar la publicidad, por favor realiza la transferencia bancaria:</p>
+              </div>
+              
+              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 space-y-4">
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nombre</p>
+                  <p className="font-bold text-gray-900 leading-tight">Brahian Ramon Gonzalez Rojas</p>
                 </div>
-                <div className="divide-y divide-gray-50">
-                  {solicitudes.length > 0 ? solicitudes.map((s) => (
-                    <div key={s.id} className="p-8 space-y-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-bold text-lg text-gray-900">{s.nombre}</p>
-                          <p className="text-gray-500 text-sm">{s.email}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={() => handleAdminSolicitud(s.id, 'aprobar')}
-                            className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-700 flex items-center gap-2"
-                          >
-                            <CheckCircle className="w-4 h-4" /> Aprobar
-                          </button>
-                          <button 
-                            onClick={() => handleAdminSolicitud(s.id, 'rechazar')}
-                            className="bg-gray-200 text-gray-600 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-300 flex items-center gap-2"
-                          >
-                            <XCircle className="w-4 h-4" /> Rechazar
-                          </button>
-                        </div>
-                      </div>
-                      <div className="bg-white p-4 rounded-xl border border-gray-200 italic text-gray-600">
-                        "{s.motivo || 'Sin motivo especificado'}"
-                      </div>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Solicitado el {new Date(s.creado_en).toLocaleDateString()}</p>
-                    </div>
-                  )) : (
-                    <div className="p-16 text-center">
-                      <CheckCircle className="w-16 h-16 text-green-100 mx-auto mb-4" />
-                      <p className="text-gray-500">No hay solicitudes pendientes en este momento.</p>
-                    </div>
-                  )}
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">RUC</p>
+                  <p className="font-bold text-gray-900 leading-tight">6711627-2</p>
+                </div>
+                <div className="flex gap-8">
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Cuenta</p>
+                    <p className="font-bold text-gray-900 leading-tight">6192432789</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Entidad</p>
+                    <p className="font-bold text-gray-900 leading-tight text-red-600">Ueno Bank</p>
+                  </div>
                 </div>
               </div>
-            )}
-          </motion.div>
+              
+              <div className="bg-red-50 p-4 rounded-xl flex gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                <p className="text-sm text-red-800">
+                  Envía el comprobante de transferencia en el area de <strong>Notificaciones</strong> para su validación.
+                </p>
+              </div>
+              
+              <button 
+                onClick={handleCloseBankDetails}
+                className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-black transition-all shadow-lg"
+              >
+                Entendido, ir a mis noticias
+              </button>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

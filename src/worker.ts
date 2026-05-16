@@ -368,6 +368,12 @@ app.get('/api/setup-db', async (c) => {
         publicado_en DATETIME,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        patrocinada INTEGER DEFAULT 0,
+        patrocinio_monto REAL,
+        patrocinio_marca TEXT,
+        patrocinio_ruc TEXT,
+        patrocinio_estado TEXT DEFAULT 'pendiente',
+        patrocinio_comprobante TEXT,
         FOREIGN KEY (autor_id) REFERENCES usuarios(id),
         FOREIGN KEY (categoria_id) REFERENCES categorias(id)
       )`),
@@ -407,6 +413,30 @@ app.get('/api/setup-db', async (c) => {
     return c.json({ message: 'Base de datos inicializada correctamente' });
   } catch (error: any) {
     return c.json({ error: 'Error al inicializar la base de datos', details: error.message }, 500);
+  }
+});
+
+// Admin: Migrar DB (Add new columns)
+app.get('/api/admin/migrar-db', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    await c.env.DB.exec(`
+      ALTER TABLE noticias ADD COLUMN patrocinada INTEGER DEFAULT 0;
+      ALTER TABLE noticias ADD COLUMN patrocinio_monto REAL;
+      ALTER TABLE noticias ADD COLUMN patrocinio_marca TEXT;
+      ALTER TABLE noticias ADD COLUMN patrocinio_ruc TEXT;
+      ALTER TABLE noticias ADD COLUMN patrocinio_estado TEXT DEFAULT 'pendiente';
+      ALTER TABLE noticias ADD COLUMN patrocinio_comprobante TEXT;
+    `).catch(() => console.log('Columnas ya existen o error en migración'));
+
+    return c.json({ message: 'Migración completada' });
+  } catch (error: any) {
+    return c.json({ error: 'Error en migración', details: error.message }, 500);
   }
 });
 
@@ -483,7 +513,10 @@ app.post('/api/noticias', async (c) => {
     }
     
     const body = await c.req.json();
-    const { titulo, subtitulo, contenido, categoria_id, imagen_destacada, estado } = body;
+    const { 
+      titulo, subtitulo, contenido, categoria_id, imagen_destacada, estado,
+      patrocinada, patrocinio_monto, patrocinio_marca, patrocinio_ruc
+    } = body;
 
     if (!titulo || !contenido || !categoria_id) {
       return c.json({ error: 'Faltan campos obligatorios (titulo, contenido, categoria_id)' }, 400);
@@ -498,8 +531,11 @@ app.post('/api/noticias', async (c) => {
     }
 
     await c.env.DB.prepare(`
-      INSERT INTO noticias (id, autor_id, categoria_id, titulo, subtitulo, contenido, imagen_destacada, estado, publicado_en, creado_en, actualizado_en)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO noticias (
+        id, autor_id, categoria_id, titulo, subtitulo, contenido, imagen_destacada, estado, publicado_en, creado_en, actualizado_en,
+        patrocinada, patrocinio_monto, patrocinio_marca, patrocinio_ruc, patrocinio_estado
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id, 
       payload.id, 
@@ -511,7 +547,12 @@ app.post('/api/noticias', async (c) => {
       estado || 'borrador', 
       estado === 'publicado' ? now : null, 
       now, 
-      now
+      now,
+      patrocinada ? 1 : 0,
+      patrocinada ? parseFloat(String(patrocinio_monto)) : null,
+      patrocinada ? patrocinio_marca : null,
+      patrocinada ? patrocinio_ruc : null,
+      patrocinada ? 'pendiente' : null
     ).run();
 
     return c.json({ id, message: 'Noticia creada correctamente' }, 201);
@@ -532,7 +573,10 @@ app.put('/api/noticias/:id', async (c) => {
     const payload = await verify(token, secret, 'HS256');
 
     const body = await c.req.json();
-    const { titulo, subtitulo, contenido, categoria_id, imagen_destacada, estado } = body;
+    const { 
+      titulo, subtitulo, contenido, categoria_id, imagen_destacada, estado,
+      patrocinada, patrocinio_monto, patrocinio_marca, patrocinio_ruc
+    } = body;
 
     // Verificar propiedad o admin
     const existing: any = await c.env.DB.prepare('SELECT autor_id FROM noticias WHERE id = ?').bind(newsId).first();
@@ -544,9 +588,17 @@ app.put('/api/noticias/:id', async (c) => {
     const now = new Date().toISOString();
     await c.env.DB.prepare(`
       UPDATE noticias 
-      SET titulo = ?, subtitulo = ?, contenido = ?, categoria_id = ?, imagen_destacada = ?, estado = ?, actualizado_en = ?
+      SET titulo = ?, subtitulo = ?, contenido = ?, categoria_id = ?, imagen_destacada = ?, estado = ?, actualizado_en = ?,
+          patrocinada = ?, patrocinio_monto = ?, patrocinio_marca = ?, patrocinio_ruc = ?
       WHERE id = ?
-    `).bind(titulo, subtitulo, contenido, categoria_id, imagen_destacada, estado, now, newsId).run();
+    `).bind(
+      titulo, subtitulo, contenido, categoria_id, imagen_destacada, estado, now, 
+      patrocinada ? 1 : 0, 
+      patrocinada ? parseFloat(String(patrocinio_monto)) : null, 
+      patrocinada ? patrocinio_marca : null, 
+      patrocinada ? patrocinio_ruc : null,
+      newsId
+    ).run();
 
     return c.json({ message: 'Noticia actualizada correctamente' });
   } catch (error: any) {
@@ -648,6 +700,85 @@ app.post('/api/admin/solicitudes/:id', async (c) => {
     return c.json({ message: `Solicitud ${accion}ada` });
   } catch (error: any) {
     return c.json({ error: 'Error al procesar solicitud', details: error.message }, 500);
+  }
+});
+
+// Admin: List Patrocinios
+app.get('/api/admin/patrocinios', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT n.id, n.titulo, n.patrocinio_marca, n.patrocinio_monto, n.patrocinio_ruc, n.patrocinio_estado, n.patrocinio_comprobante, u.nombre as autor_nombre
+      FROM noticias n 
+      JOIN usuarios u ON n.autor_id = u.id
+      WHERE n.patrocinada = 1 
+      ORDER BY n.creado_en DESC
+    `).all();
+    return c.json(results || []);
+  } catch (error: any) {
+    return c.json({ error: 'Error al obtener patrocinios', details: error.message }, 500);
+  }
+});
+
+// Admin: Update Patrocinio Status
+app.post('/api/admin/patrocinios/:id/estado', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  const newsId = c.req.param('id');
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    const { estado } = await c.req.json();
+    
+    const noticia: any = await c.env.DB.prepare('SELECT autor_id, titulo FROM noticias WHERE id = ?').bind(newsId).first();
+    if (!noticia) return c.json({ error: 'Noticia no encontrada' }, 404);
+
+    await c.env.DB.prepare("UPDATE noticias SET patrocinio_estado = ? WHERE id = ?").bind(estado, newsId).run();
+
+    // Notificar al autor
+    await c.env.DB.prepare("INSERT INTO notificaciones (usuario_id, mensaje, tipo) VALUES (?, ?, ?)").bind(
+      noticia.autor_id, 
+      `El patrocinio para tu noticia "${noticia.titulo}" ha cambiado de estado a: ${estado}.`, 
+      estado === 'aceptado' ? 'success' : (estado === 'rechazado' ? 'error' : 'info')
+    ).run();
+
+    return c.json({ message: 'Estado de patrocinio actualizado' });
+  } catch (error: any) {
+    return c.json({ error: 'Error al actualizar estado de patrocinio', details: error.message }, 500);
+  }
+});
+
+// Noticias: Upload Comprobante
+app.post('/api/noticias/:id/comprobante', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  const newsId = c.req.param('id');
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+
+    const body = await c.req.json();
+    const { url } = body;
+
+    const existing: any = await c.env.DB.prepare('SELECT autor_id FROM noticias WHERE id = ?').bind(newsId).first();
+    if (!existing) return c.json({ error: 'Noticia no encontrada' }, 404);
+    if (existing.autor_id !== payload.id) return c.json({ error: 'Prohibido' }, 403);
+
+    await c.env.DB.prepare("UPDATE noticias SET patrocinio_comprobante = ?, patrocinio_estado = 'en revision' WHERE id = ?").bind(url, newsId).run();
+
+    return c.json({ message: 'Comprobante subido correctamente, en revisión' });
+  } catch (error: any) {
+    return c.json({ error: 'Error al subir comprobante', details: error.message }, 500);
   }
 });
 
@@ -776,6 +907,7 @@ app.get('/api/metricas', async (c) => {
   if (!token) return c.json({ error: 'No autorizado' }, 401);
 
   const periodo = c.req.query('periodo') || 'mes'; // dia, mes, año
+  const noticiaId = c.req.query('noticiaId');
 
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
@@ -786,17 +918,27 @@ app.get('/api/metricas', async (c) => {
     if (periodo === 'año') dateFilter = "date('now', '-1 year')";
 
     let query = `
-      SELECT n.titulo, COALESCE(SUM(m.visitas), 0) as total_visitas 
+      SELECT n.id, n.titulo, COALESCE(SUM(m.visitas), 0) as total_visitas 
       FROM noticias n 
       LEFT JOIN metricas_visitas m ON n.id = m.noticia_id AND m.fecha >= ${dateFilter}
     `;
     const params: any[] = [];
     
+    const filters = [];
     if (payload.rol !== 'admin') {
-      query += ' WHERE n.autor_id = ?';
+      filters.push('n.autor_id = ?');
       params.push(payload.id);
     }
-    query += ' GROUP BY n.id, n.titulo ORDER BY total_visitas DESC LIMIT 5';
+    if (noticiaId) {
+      filters.push('n.id = ?');
+      params.push(noticiaId);
+    }
+
+    if (filters.length > 0) {
+      query += ' WHERE ' + filters.join(' AND ');
+    }
+    
+    query += ' GROUP BY n.id, n.titulo ORDER BY total_visitas DESC LIMIT 10';
     
     const { results } = await c.env.DB.prepare(query).bind(...params).all();
     return c.json(results || []);

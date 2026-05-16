@@ -114,6 +114,13 @@ export const api = {
 
     delete: (id: string): Promise<any> =>
       fetchWithAuth(`/api/noticias/${id}`, { method: 'DELETE' }) as any,
+    
+    subirComprobante: (id: string, url: string): Promise<any> => 
+      fetchWithAuth(`/api/noticias/${id}/comprobante`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      }) as any,
   },
   
   admin: {
@@ -124,6 +131,14 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accion })
       }) as any,
+    listPatrocinios: (): Promise<any[]> => fetchWithAuth('/api/admin/patrocinios') as any,
+    handlePatrocinio: (id: string, estado: string): Promise<any> => 
+      fetchWithAuth(`/api/admin/patrocinios/${id}/estado`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado })
+      }) as any,
+    migrarDB: (): Promise<any> => fetchWithAuth('/api/admin/migrar-db') as any,
   },
   
   seguidores: {
@@ -147,8 +162,8 @@ export const api = {
   },
   
   metricas: {
-    get: (periodo: string = 'mes'): Promise<Metrica[]> => 
-      fetchWithAuth(`/api/metricas?periodo=${periodo}`) as any,
+    get: (periodo: string = 'mes', noticiaId?: string): Promise<Metrica[]> => 
+      fetchWithAuth(`/api/metricas?periodo=${periodo}${noticiaId ? `&noticiaId=${noticiaId}` : ''}`) as any,
   },
   
   upload: (file: File): Promise<{ url: string }> => {

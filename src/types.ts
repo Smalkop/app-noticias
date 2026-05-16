@@ -32,6 +32,13 @@ export interface Noticia {
   publicado_en: string;
   creado_en: string;
   actualizado_en: string;
+  // Sponsorship
+  patrocinada: number;
+  patrocinio_monto?: number;
+  patrocinio_marca?: string;
+  patrocinio_ruc?: string;
+  patrocinio_estado?: 'pendiente' | 'en revision' | 'aceptado' | 'rechazado' | 'envie otra';
+  patrocinio_comprobante?: string;
 }
 
 export interface Metrica {
