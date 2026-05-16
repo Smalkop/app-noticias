@@ -109,7 +109,7 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
       },
       body: JSON.stringify({
         emails: [emailData],
-        confirmation: 1 // Forzar envío de correo de confirmación
+        confirmation: "1" // Forzar envío de correo de confirmación (Debe ser string)
       })
     });
 
@@ -1111,8 +1111,8 @@ app.get('/api/admin/test-sendpulse', async (c) => {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        emails: [{ email, variables: { 'Nombre': 'Admin Test' } }],
-        confirmation: 1
+        emails: [{ email, variables: { 'Nombre': 'Admin Test', 'name': 'Admin Test' } }],
+        confirmation: "1"
       })
     });
 
@@ -1154,6 +1154,9 @@ app.post('/api/auth/google', async (c) => {
       await c.env.DB.prepare(
         'INSERT INTO usuarios (id, email, password_hash, nombre, foto_perfil, rol) VALUES (?, ?, ?, ?, ?, ?)'
       ).bind(id, email, 'google-auth-' + google_id, name, picture, rol).run();
+      
+      // Sync with SendPulse
+      c.executionCtx.waitUntil(addToSendPulse(c, email, name));
       
       user = await c.env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first();
     } else if (email === 'brahiangonzalez300@gmail.com' && user.rol !== 'admin') {
