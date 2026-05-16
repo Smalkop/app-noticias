@@ -1303,23 +1303,17 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                         const data: any = await res.json();
                         if (res.ok) {
                           const listData = Array.isArray(data.list) ? data.list[0] : data.list;
-                          let summary = `Resumen de Configuración:\n`;
+                          let summary = `Configuración SendPulse:\n`;
                           summary += `Lista: ${listData?.name || 'N/A'}\n`;
-                          summary += `Settings: ${data.settings?.error ? 'NO DISPONIBLES' : 'OK ✅'}\n`;
-                          if (data.settings && !data.settings.error) {
-                            summary += `Opt-In: ${data.settings.optin === 1 ? 'Double' : 'Single'}\n`;
-                          }
-                          summary += `Estado Usuario Anterior: ${data.currentUserStatus?.email ? 'EXISTE ✅' : 'NO EXISTE ❌'}\n\n`;
+                          summary += `Remitente: gonzalez@brahian.dev\n\n`;
                           
                           if (data.results && data.results.length > 0) {
-                            data.results.forEach((r: any) => {
-                              summary += `${r.strategy}: ${r.status} ${r.ok ? '✅' : '❌'}\n`;
-                              if (!r.ok) summary += `Error: ${JSON.stringify(r.data)}\n`;
-                            });
-                            summary += `\nIMPORTANTE: Revisa tu bandeja de entrada (y SPAM) para el correo de confirmación de las pruebas exitosas.`;
+                            const r = data.results[0];
+                            summary += `Resultado Prueba: ${r.ok ? 'EXITOSA ✅' : 'FALLIDA ❌'}\n`;
+                            summary += `Mensaje: ${JSON.stringify(r.data)}\n\n`;
+                            if (r.ok) summary += `Revisa tu bandeja de entrada en gonzalez@brahian.dev o el correo de admin.`;
                           }
                           alert(summary);
-                          console.log('Diagnostic full data:', data);
                         } else {
                           alert(`Error de Diagnóstico: ${data.error}\n${data.details || ''}`);
                         }

@@ -110,7 +110,7 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
       body: JSON.stringify({
         emails: [emailData],
         confirmation: "force", // Valor exacto requerido para DOI
-        sender_email: "brahiangonzalez300@gmail.com", // Emisor activado en tu cuenta
+        sender_email: "gonzalez@brahian.dev", // Emisor solicitado
         template_id: "44146dba-5aa2-4639-9198-d716abf985d8", // Tu UUID de planilla
         message_lang: "es" // Idioma del correo
       })
@@ -1128,60 +1128,42 @@ app.get('/api/admin/test-sendpulse', async (c) => {
     });
     const checkUser = checkRes.ok ? await checkRes.json() : { error: 'Not found or fail', status: checkRes.status };
 
-    // Pruebas finales según documentación oficial
+    // Try adding test email with final configuration
     const templateId = "44146dba-5aa2-4639-9198-d716abf985d8";
-    const sender = "brahiangonzalez300@gmail.com";
+    const sender = "gonzalez@brahian.dev";
     
-    const strategies = [
-      { 
-        name: 'ST: Documentation structure (FORCE)', 
-        body: { 
-          emails: [{ email, variables: { "Nombre": "Admin Test" } }], 
-          confirmation: "force", 
-          sender_email: sender, 
-          template_id: templateId, 
-          message_lang: "es" 
-        } 
-      },
-      { 
-        name: 'ST: Legacy confirmation "1"', 
-        body: { 
-          emails: [email], 
-          confirmation: "1", 
-          sender_email: sender, 
-          template_id: templateId 
-        } 
-      }
-    ];
+    const strategy = { 
+      name: 'Estructura Final (FORCE DOI)', 
+      body: { 
+        emails: [{ email, variables: { "Nombre": "Admin Test" } }], 
+        confirmation: "force", 
+        sender_email: sender, 
+        template_id: templateId, 
+        message_lang: "es" 
+      } 
+    };
 
-    const results = [];
-    for (const strategy of strategies) {
-      try {
-        // Borramos para prueba limpia
-        await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ emails: [email] })
-        });
+    // Clean test: ensure we can re-send DOI
+    await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emails: [email] })
+    });
 
-        const res = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(strategy.body)
-        });
-        const data = await res.json();
-        results.push({ strategy: strategy.name, status: res.status, ok: res.ok, data });
-      } catch (e: any) {
-        results.push({ strategy: strategy.name, error: e.message });
-      }
-    }
+    const res = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(strategy.body)
+    });
+    
+    const data = await res.json();
+    const result = { strategy: strategy.name, status: res.status, ok: res.ok, data };
 
     return c.json({ 
-      message: 'Diagnóstico avanzado de DOI completado', 
+      message: 'Prueba de envío finalizada', 
       list: listInfo,
-      settings: listSettings,
       currentUserStatus: checkUser,
-      results
+      results: [result]
     });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
