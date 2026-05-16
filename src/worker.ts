@@ -9,6 +9,9 @@ type Bindings = {
   IMAGES: R2Bucket;
   ASSETS: { fetch: typeof fetch };
   JWT_SECRET: string;
+  SENDPULSE_ID: string;
+  SENDPULSE_SECRET: string;
+  SENDPULSE_LIST_ID: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -32,6 +35,50 @@ app.onError((err, c) => {
   console.error(err);
   return c.json({ error: 'Error interno del servidor', message: err.message, name: err.name }, 500);
 });
+
+// Helper for SendPulse
+async function addToSendPulse(c: any, email: string, nombre: string) {
+  const { SENDPULSE_ID, SENDPULSE_SECRET, SENDPULSE_LIST_ID } = c.env;
+  if (!SENDPULSE_ID || !SENDPULSE_SECRET || !SENDPULSE_LIST_ID) {
+    console.warn('SendPulse credentials missing');
+    return;
+  }
+
+  try {
+    // 1. Get Token
+    const authRes = await fetch('https://api.sendpulse.com/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'client_credentials',
+        client_id: SENDPULSE_ID,
+        client_secret: SENDPULSE_SECRET
+      })
+    });
+    
+    if (!authRes.ok) throw new Error('SendPulse auth failed');
+    const { access_token } = await authRes.json() as any;
+
+    // 2. Add email to list
+    await fetch(`https://api.sendpulse.com/addressbooks/${SENDPULSE_LIST_ID}/emails`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        emails: [
+          {
+            email,
+            variables: { 'Nombre': nombre }
+          }
+        ]
+      })
+    });
+  } catch (error) {
+    console.error('SendPulse Error:', error);
+  }
+}
 
 app.use('/api/*', async (c, next) => {
   if (!c.env.DB) {
@@ -133,6 +180,9 @@ app.post('/api/auth/registro', async (c) => {
     await c.env.DB.prepare(
       'INSERT INTO usuarios (id, email, password_hash, nombre, rol) VALUES (?, ?, ?, ?, ?)'
     ).bind(id, email, password, nombre, rol).run();
+
+    // Add to SendPulse in background
+    c.executionCtx.waitUntil(addToSendPulse(c, email, nombre));
 
     return c.json({ id, email, nombre, rol }, 201);
   } catch (error: any) {
