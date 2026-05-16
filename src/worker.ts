@@ -184,14 +184,16 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
       email,
       variables: { 
         'Nombre': nombre,
+        'nombre': nombre,
+        'Name': nombre,
         'name': nombre
       }
     };
     if (phone) {
+      emailData.variables.Phone = phone;
       emailData.variables.phone = phone;
-      emailData.variables.Phone = phone; // Common standard
       emailData.variables['Teléfono'] = phone;
-      emailData.variables['Telefono'] = phone; // No accent safety
+      emailData.variables['Telefono'] = phone;
     }
 
     // 3. Enviar a la lista con la estructura exacta de la documentación
@@ -214,8 +216,10 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
     
     // Log to D1 for debugging
     try {
+      const dbStatus = spRes.ok ? "SUCCESS" : "ERROR";
+      const logMsg = `SendPulse ${dbStatus} [${email}] (Phone: ${phone}) Result: ${JSON.stringify(result)}`;
       await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
-        .bind(`SendPulse API [${email}] (Phone: ${phone}): ` + JSON.stringify(result)).run();
+        .bind(logMsg).run();
     } catch(e) {}
 
     if (!spRes.ok) {
@@ -963,6 +967,25 @@ app.get('/api/setup-db', async (c) => {
   }
 });
 
+// Admin: Sync current user profile to SendPulse manually
+app.post('/api/admin/sync-perfil', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256') as any;
+    
+    const user: any = await c.env.DB.prepare('SELECT email, nombre, telefono FROM usuarios WHERE id = ?').bind(payload.id).first();
+    if (!user) return c.json({ error: 'Usuario no encontrado' }, 404);
+    
+    const result = await addToSendPulse(c, user.email, user.nombre, user.telefono);
+    return c.json({ message: 'Sincronización completada', result });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
 // Admin: Migrar DB (Add new columns)
 app.get('/api/admin/migrar-db', async (c) => {
   const token = getCookie(c, 'token');
@@ -1013,11 +1036,9 @@ app.get('/api/admin/migrar-db', async (c) => {
       );
     `).catch(() => console.log('Tablas ya existen'));
 
-    // User verification and phone migration
-    await c.env.DB.exec(`
-      ALTER TABLE usuarios ADD COLUMN verificado INTEGER DEFAULT 0;
-      ALTER TABLE usuarios ADD COLUMN telefono TEXT;
-    `).catch(() => console.log('Columnas usuario verification ya existen'));
+    // User verification and phone migration - INDIVIDUAL statements
+    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN verificado INTEGER DEFAULT 0`).catch(() => console.log('Columna verificado ya existe'));
+    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN telefono TEXT`).catch(() => console.log('Columna telefono ya existe'));
 
     // Webhook logs table if missing
     await c.env.DB.exec(`
@@ -1028,7 +1049,7 @@ app.get('/api/admin/migrar-db', async (c) => {
       );
     `).catch(() => console.log('Tabla webhook_logs ya existe'));
 
-    return c.json({ message: 'Migración completada' });
+    return c.json({ message: 'Migración completada con éxito. Todas las columnas y tablas han sido revisadas.' });
   } catch (error: any) {
     return c.json({ error: 'Error en migración', details: error.message }, 500);
   }

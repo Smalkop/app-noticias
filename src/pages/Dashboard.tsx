@@ -1064,6 +1064,20 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                       />
                     </div>
                     <p className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-wider">Esencial para recibir alertas de noticias de último momento.</p>
+                    <button 
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await fetch('/api/admin/sync-perfil', { method: 'POST' });
+                          alert('Datos sincronizados con SendPulse con éxito');
+                        } catch (e) {
+                          alert('Error al sincronizar: ' + (e as Error).message);
+                        }
+                      }}
+                      className="mt-2 text-[10px] bg-gray-100 px-3 py-1 rounded text-gray-600 hover:bg-gray-200 uppercase font-black tracking-widest transition-all"
+                    >
+                      Sincronizar con SendPulse ahora
+                    </button>
                   </div>
 
                   <div>
@@ -1329,6 +1343,23 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
               </div>
               <div className="p-6 space-y-4">
                 <div className="flex flex-wrap gap-4">
+                  <button 
+                    onClick={async () => {
+                      if(window.confirm('¿Desea ejecutar la migración técnica? Esto reparará columnas faltantes (como Teléfono) y tablas de logs.')) {
+                        try {
+                          const res = await api.admin.migrarDB();
+                          alert(res.message || 'Migración exitosa');
+                          window.location.reload();
+                        } catch (e: any) { 
+                          alert('Error: ' + e.message); 
+                        }
+                      }
+                    }}
+                    className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700 transition-all flex items-center gap-2"
+                  >
+                    <Database className="w-5 h-5" /> Migrar / Reparar Base de Datos
+                  </button>
+
                   <button 
                     onClick={async () => {
                       if(window.confirm('¿Desea sincronizar el estado de verificación con SendPulse manualmente?')) {
