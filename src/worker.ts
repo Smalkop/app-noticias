@@ -205,6 +205,128 @@ app.post('/api/auth/solicitar-autor', async (c) => {
   }
 });
 
+// Seguidores: Check status
+app.get('/api/seguidores/status/:autorId', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ siguiendo: false });
+
+  const autorId = c.req.param('autorId');
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+
+    const following = await c.env.DB.prepare('SELECT 1 FROM seguidores WHERE seguidor_id = ? AND autor_id = ?')
+      .bind(payload.id, autorId).first();
+
+    return c.json({ siguiendo: !!following });
+  } catch (err) {
+    return c.json({ siguiendo: false });
+  }
+});
+
+// Seguidores: Follow
+app.post('/api/seguidores/follow/:autorId', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  const autorId = c.req.param('autorId');
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+
+    if (payload.id === autorId) return c.json({ error: 'No puedes seguirte a ti mismo' }, 400);
+
+    await c.env.DB.prepare('INSERT OR IGNORE INTO seguidores (seguidor_id, autor_id) VALUES (?, ?)')
+      .bind(payload.id, autorId).run();
+
+    return c.json({ message: 'Siguiendo' });
+  } catch (error: any) {
+    return c.json({ error: 'Error al seguir autor', details: error.message }, 500);
+  }
+});
+
+// Seguidores: Unfollow
+app.post('/api/seguidores/unfollow/:autorId', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  const autorId = c.req.param('autorId');
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+
+    await c.env.DB.prepare('DELETE FROM seguidores WHERE seguidor_id = ? AND autor_id = ?')
+      .bind(payload.id, autorId).run();
+
+    return c.json({ message: 'Dejaste de seguir' });
+  } catch (error: any) {
+    return c.json({ error: 'Error al dejar de seguir autor', details: error.message }, 500);
+  }
+});
+
+// Seguidores: List (Mis Seguidores)
+app.get('/api/seguidores/mis-seguidores', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT u.id as seguidor_id, u.nombre as seguidor_nombre, u.foto_perfil as seguidor_foto, s.creado_en
+      FROM seguidores s
+      JOIN usuarios u ON s.seguidor_id = u.id
+      WHERE s.autor_id = ?
+      ORDER BY s.creado_en DESC
+    `).bind(payload.id).all();
+
+    return c.json(results || []);
+  } catch (error: any) {
+    return c.json({ error: 'Error al obtener seguidores', details: error.message }, 500);
+  }
+});
+
+// Notificaciones: List
+app.get('/api/notificaciones', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT * FROM notificaciones 
+      WHERE usuario_id = ?
+      ORDER BY creado_en DESC
+      LIMIT 20
+    `).bind(payload.id).all();
+
+    return c.json(results || []);
+  } catch (error: any) {
+    return c.json({ error: 'Error al obtener notificaciones', details: error.message }, 500);
+  }
+});
+
+// Notificaciones: Mark as read
+app.post('/api/notificaciones/leer', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+
+    await c.env.DB.prepare('UPDATE notificaciones SET leida = 1 WHERE usuario_id = ?')
+      .bind(payload.id).run();
+
+    return c.json({ message: 'Leídas' });
+  } catch (error: any) {
+    return c.json({ error: 'Error al marcar como leídas', details: error.message }, 500);
+  }
+});
+
 // Setup: Inicializar Database (Ruta temporal de utilidad)
 app.get('/api/setup-db', async (c) => {
   try {
@@ -256,6 +378,23 @@ app.get('/api/setup-db', async (c) => {
         visitas INTEGER DEFAULT 0,
         UNIQUE(noticia_id, fecha),
         FOREIGN KEY (noticia_id) REFERENCES noticias(id)
+      )`),
+      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS seguidores (
+        seguidor_id TEXT NOT NULL,
+        autor_id TEXT NOT NULL,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (seguidor_id, autor_id),
+        FOREIGN KEY (seguidor_id) REFERENCES usuarios(id),
+        FOREIGN KEY (autor_id) REFERENCES usuarios(id)
+      )`),
+      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS notificaciones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario_id TEXT NOT NULL,
+        mensaje TEXT NOT NULL,
+        tipo TEXT DEFAULT 'info',
+        leida INTEGER DEFAULT 0,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
       )`),
       c.env.DB.prepare(`INSERT OR IGNORE INTO categorias (nombre, slug) VALUES 
         ('Política', 'politica'),
@@ -486,11 +625,23 @@ app.post('/api/admin/solicitudes/:id', async (c) => {
     if (accion === 'aprobar') {
       await c.env.DB.batch([
         c.env.DB.prepare("UPDATE usuarios SET rol = 'autor' WHERE id = ?").bind(solicitud.usuario_id),
-        c.env.DB.prepare("UPDATE solicitudes_autor SET estado = 'aprobado' WHERE id = ?").bind(requestId)
+        c.env.DB.prepare("UPDATE solicitudes_autor SET estado = 'aprobado' WHERE id = ?").bind(requestId),
+        c.env.DB.prepare("INSERT INTO notificaciones (usuario_id, mensaje, tipo) VALUES (?, ?, ?)").bind(
+          solicitud.usuario_id, 
+          '¡Tu solicitud para ser autor ha sido aprobada! Ya puedes publicar noticias.', 
+          'success'
+        )
       ]);
       console.log(`[EMAIL SIMULATION] To: ${solicitud.email} - Subject: ¡Felicidades, ya eres autor! - Body: Hola ${solicitud.nombre}, tu solicitud ha sido aprobada.`);
     } else {
-      await c.env.DB.prepare("UPDATE solicitudes_autor SET estado = 'rechazado' WHERE id = ?").bind(requestId).run();
+      await c.env.DB.batch([
+        c.env.DB.prepare("UPDATE solicitudes_autor SET estado = 'rechazado' WHERE id = ?").bind(requestId),
+        c.env.DB.prepare("INSERT INTO notificaciones (usuario_id, mensaje, tipo) VALUES (?, ?, ?)").bind(
+          solicitud.usuario_id, 
+          'Lamentamos informarte que tu solicitud para ser autor no ha sido aprobada en esta ocasión.', 
+          'warning'
+        )
+      ]);
       console.log(`[EMAIL SIMULATION] To: ${solicitud.email} - Subject: Actualización sobre tu solicitud - Body: Hola ${solicitud.nombre}, lamentamos informarte que tu solicitud ha sido rechazada.`);
     }
 
@@ -624,15 +775,20 @@ app.get('/api/metricas', async (c) => {
   const token = getCookie(c, 'token');
   if (!token) return c.json({ error: 'No autorizado' }, 401);
 
+  const periodo = c.req.query('periodo') || 'mes'; // dia, mes, año
+
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
     const payload = await verify(token, secret, 'HS256');
     
-    // Usar LEFT JOIN para incluir noticias sin visitas y agrupar por campos seleccionados
+    let dateFilter = "date('now', '-1 month')";
+    if (periodo === 'dia') dateFilter = "date('now')";
+    if (periodo === 'año') dateFilter = "date('now', '-1 year')";
+
     let query = `
       SELECT n.titulo, COALESCE(SUM(m.visitas), 0) as total_visitas 
       FROM noticias n 
-      LEFT JOIN metricas_visitas m ON n.id = m.noticia_id
+      LEFT JOIN metricas_visitas m ON n.id = m.noticia_id AND m.fecha >= ${dateFilter}
     `;
     const params: any[] = [];
     
@@ -642,20 +798,11 @@ app.get('/api/metricas', async (c) => {
     }
     query += ' GROUP BY n.id, n.titulo ORDER BY total_visitas DESC LIMIT 5';
     
-    console.log('Metricas Query:', query, params);
     const { results } = await c.env.DB.prepare(query).bind(...params).all();
-    if (!results) {
-      console.warn('Metricas returned no results (undefined or null)');
-    }
     return c.json(results || []);
   } catch (error: any) {
-    console.error('Metricas Error:', error.message, error.stack);
-    return c.json({ 
-      error: error.message || 'Error al obtener métricas', 
-      details: error.message,
-      stack: error.stack,
-      hint: 'Asegúrate de que la tabla metricas_visitas y noticias existan.'
-    }, 500);
+    console.error('Metricas Error:', error.message);
+    return c.json({ error: 'Error al obtener métricas' }, 500);
   }
 });
 

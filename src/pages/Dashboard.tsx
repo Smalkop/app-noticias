@@ -4,10 +4,11 @@ import { User, Metrica, Categoria, Noticia } from '../types';
 import { 
   BarChart3, Plus, FileText, Image as ImageIcon, Send, 
   Settings, User as UserIcon, Trash2, Edit, CheckCircle, XCircle,
-  Clock, AlertCircle
+  Clock, AlertCircle, Bell, Users, Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { compressImage } from '../lib/imageUtils';
+import { Seguidor, Notificacion } from '../types';
 
 interface DashboardProps {
   user: User;
@@ -19,8 +20,11 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [misNoticias, setMisNoticias] = useState<Noticia[]>([]);
   const [solicitudes, setSolicitudes] = useState<any[]>([]);
+  const [seguidores, setSeguidores] = useState<Seguidor[]>([]);
+  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'metrics' | 'create' | 'manage' | 'profile' | 'admin'>('metrics');
+  const [activeTab, setActiveTab] = useState<'metrics' | 'create' | 'manage' | 'profile' | 'admin' | 'notifications'>('metrics');
+  const [metricPeriod, setMetricPeriod] = useState('mes');
 
   // Form state for News
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -49,8 +53,12 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
     setLoading(true);
     try {
       if (activeTab === 'metrics') {
-        const results = await api.metricas.get();
+        const results = await api.metricas.get(metricPeriod);
         setMetricas(results);
+        if (user.rol === 'autor' || user.rol === 'admin') {
+          const follows = await api.seguidores.misSeguidores();
+          setSeguidores(follows);
+        }
       } else if (activeTab === 'manage') {
         const results = await api.noticias.misNoticias();
         setMisNoticias(results);
@@ -60,6 +68,10 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
       } else if (activeTab === 'admin' && user.rol === 'admin') {
         const results = await api.admin.listSolicitudes();
         setSolicitudes(results);
+      } else if (activeTab === 'notifications') {
+        const results = await api.notificaciones.list();
+        setNotificaciones(results);
+        await api.notificaciones.leerTodas();
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -67,6 +79,12 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (activeTab === 'metrics') {
+      loadData();
+    }
+  }, [metricPeriod]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'news' | 'profile' = 'news') => {
     const file = e.target.files?.[0];
@@ -248,6 +266,12 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
             />
           )}
           <TabButton 
+            active={activeTab === 'notifications'} 
+            onClick={() => setActiveTab('notifications')} 
+            icon={<Bell className="w-4 h-4" />} 
+            label="Notificaciones" 
+          />
+          <TabButton 
             active={activeTab === 'profile'} 
             onClick={() => setActiveTab('profile')} 
             icon={<UserIcon className="w-4 h-4" />} 
@@ -270,48 +294,150 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'metrics' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="md:col-span-2 bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
-                  <h3 className="text-xl font-bold mb-8 flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-red-600" /> Noticias más leídas
-                  </h3>
-                  <div className="space-y-6">
-                    {Array.isArray(metricas) && metricas.length > 0 ? metricas.map((m, i) => (
-                      <div key={i} className="flex items-center gap-4">
-                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-400 text-xs">
-                          {i + 1}
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-bold text-gray-900 line-clamp-1">{m.titulo}</p>
-                          <div className="w-full bg-gray-100 h-2 rounded-full mt-2 overflow-hidden">
-                            <div 
-                              className="bg-red-500 h-full rounded-full transition-all duration-1000" 
-                              style={{ width: `${(m.total_visitas / (metricas[0]?.total_visitas || 1)) * 100}%` }}
-                            ></div>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 space-y-8">
+                  <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between mb-8">
+                      <h3 className="text-xl font-bold flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-red-600" /> Noticias más leídas
+                      </h3>
+                      <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
+                        {['dia', 'mes', 'año'].map((p) => (
+                          <button 
+                            key={p}
+                            onClick={() => setMetricPeriod(p)}
+                            className={`px-3 py-1 text-xs font-bold rounded-md transition-all capitalize ${metricPeriod === p ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-6">
+                      {Array.isArray(metricas) && metricas.length > 0 ? metricas.map((m, i) => (
+                        <div key={i} className="flex items-center gap-4">
+                          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-400 text-xs">
+                            {i + 1}
                           </div>
+                          <div className="flex-1">
+                            <p className="font-bold text-gray-900 line-clamp-1">{m.titulo}</p>
+                            <div className="w-full bg-gray-100 h-2 rounded-full mt-2 overflow-hidden">
+                              <div 
+                                className="bg-red-500 h-full rounded-full transition-all duration-1000" 
+                                style={{ width: `${(m.total_visitas / (metricas[0]?.total_visitas || 1)) * 100}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                          <span className="font-mono font-bold text-red-600">{m.total_visitas}</span>
                         </div>
-                        <span className="font-mono font-bold text-red-600">{m.total_visitas}</span>
+                      )) : (
+                        <div className="text-center py-12">
+                          <AlertCircle className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                          <p className="text-gray-400 italic">No hay datos de visitas para este periodo.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {(user.rol === 'autor' || user.rol === 'admin') && (
+                    <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
+                      <h3 className="text-xl font-bold mb-8 flex items-center gap-2">
+                        <Users className="w-5 h-5 text-red-600" /> Mis Suscriptores ({seguidores.length})
+                      </h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+                        {seguidores.length > 0 ? seguidores.map((s) => (
+                          <div key={s.seguidor_id} className="flex flex-col items-center text-center">
+                            {s.seguidor_foto ? (
+                              <img src={s.seguidor_foto} className="w-12 h-12 rounded-full object-cover mb-2 border border-gray-100" />
+                            ) : (
+                              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 mb-2">
+                                <UserIcon className="w-6 h-6" />
+                              </div>
+                            )}
+                            <span className="text-xs font-bold text-gray-900 line-clamp-1">{s.seguidor_nombre}</span>
+                            <span className="text-[10px] text-gray-400 capitalize">{new Date(s.creado_en).toLocaleDateString()}</span>
+                          </div>
+                        )) : (
+                          <div className="col-span-full py-8 text-center text-gray-400 italic text-sm">
+                            Aún no tienes seguidores. Interactúa más con tus lectores.
+                          </div>
+                        )}
                       </div>
-                    )) : (
-                      <div className="text-center py-12">
-                        <AlertCircle className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-                        <p className="text-gray-400 italic">No hay datos de visitas aún.</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-8">
+                  <div className="bg-gradient-to-br from-red-600 to-red-800 text-white p-8 rounded-2xl shadow-xl flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold opacity-80 mb-1">Impacto ({metricPeriod})</h3>
+                      <p className="text-5xl font-serif font-bold">
+                        {Array.isArray(metricas) ? metricas.reduce((acc, m) => acc + m.total_visitas, 0) : 0}
+                      </p>
+                      <p className="text-sm opacity-60 mt-2">Visitas en el periodo seleccionado</p>
+                    </div>
+                    <div className="mt-12 bg-white/10 p-4 rounded-xl backdrop-blur-sm">
+                      <p className="text-xs font-bold uppercase tracking-wider mb-2">Tip del día</p>
+                      <p className="text-sm italic">
+                        {getTipOfDay()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-red-600" /> Resumen de Actividad
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Noticias publicadas</span>
+                        <span className="font-bold">{misNoticias.length}</span>
                       </div>
-                    )}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Periodo activo</span>
+                        <span className="font-bold">{metricPeriod}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Ranking global</span>
+                        <span className="font-bold text-red-600">#4</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="bg-gradient-to-br from-red-600 to-red-800 text-white p-8 rounded-2xl shadow-xl flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold opacity-80 mb-1">Total Impacto</h3>
-                    <p className="text-5xl font-serif font-bold">
-                      {Array.isArray(metricas) ? metricas.reduce((acc, m) => acc + m.total_visitas, 0) : 0}
-                    </p>
-                    <p className="text-sm opacity-60 mt-2">Visitas totales acumuladas</p>
-                  </div>
-                  <div className="mt-12 bg-white/10 p-4 rounded-xl backdrop-blur-sm">
-                    <p className="text-xs font-bold uppercase tracking-wider mb-2">Tip del día</p>
-                    <p className="text-sm">Optimizar tus imágenes reduce la carga en un 60%, mejorando el SEO de tu noticia.</p>
-                  </div>
+              </div>
+            )}
+
+            {activeTab === 'notifications' && (
+              <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <Bell className="w-5 h-5 text-red-600" /> Centro de Notificaciones
+                  </h3>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {notificaciones.length > 0 ? notificaciones.map((n) => (
+                    <div key={n.id} className={`p-6 flex gap-4 hover:bg-gray-50 transition-colors ${!n.leida ? 'bg-red-50/30' : ''}`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                        n.tipo === 'success' ? 'bg-green-100 text-green-600' : 
+                        n.tipo === 'warning' ? 'bg-orange-100 text-orange-600' : 
+                        n.tipo === 'error' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
+                      }`}>
+                         <Bell className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-gray-900 font-medium leading-relaxed">{n.mensaje}</p>
+                        <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-wider uppercase">
+                          {new Date(n.creado_en).toLocaleString()}
+                        </p>
+                      </div>
+                      {!n.leida && <div className="w-2 h-2 rounded-full bg-red-600 self-center"></div>}
+                    </div>
+                  )) : (
+                    <div className="p-16 text-center">
+                      <Bell className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                      <p className="text-gray-400">No tienes notificaciones por el momento.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -608,6 +734,20 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
       </AnimatePresence>
     </div>
   );
+}
+
+function getTipOfDay() {
+  const tips = [
+    "Optimizar tus imágenes reduce la carga en un 60%, mejorando el SEO de tu noticia.",
+    "El mejor momento para publicar es entre las 8:00 y las 10:00 AM.",
+    "Títulos cortos y directos (menos de 60 caracteres) obtienen más clics.",
+    "Incluir enlaces a fuentes externas confiables aumenta la autoridad del artículo.",
+    "Las infografías y listas aumentan el tiempo de lectura promedio.",
+    "Comparte tus noticias en LinkedIn para llegar a un público más profesional.",
+    "Interactúa con tus seguidores respondiendo a sus intereses en redes sociales."
+  ];
+  const dayOfYear = Math.floor(new Date().getTime() / (1000 * 60 * 60 * 24));
+  return tips[dayOfYear % tips.length];
 }
 
 function TabButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {

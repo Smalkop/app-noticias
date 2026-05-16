@@ -126,12 +126,29 @@ export const api = {
       }) as any,
   },
   
+  seguidores: {
+    getStatus: (autorId: string): Promise<{ siguiendo: boolean }> => 
+      fetchWithAuth(`/api/seguidores/status/${autorId}`) as any,
+    follow: (autorId: string): Promise<any> => 
+      fetchWithAuth(`/api/seguidores/follow/${autorId}`, { method: 'POST' }) as any,
+    unfollow: (autorId: string): Promise<any> => 
+      fetchWithAuth(`/api/seguidores/unfollow/${autorId}`, { method: 'POST' }) as any,
+    misSeguidores: (): Promise<any[]> => 
+      fetchWithAuth('/api/seguidores/mis-seguidores') as any,
+  },
+  
+  notificaciones: {
+    list: (): Promise<any[]> => fetchWithAuth('/api/notificaciones') as any,
+    leerTodas: (): Promise<any> => fetchWithAuth('/api/notificaciones/leer', { method: 'POST' }) as any,
+  },
+  
   categorias: {
     list: (): Promise<Categoria[]> => fetchWithAuth('/api/categorias') as any,
   },
   
   metricas: {
-    get: (): Promise<Metrica[]> => fetchWithAuth('/api/metricas') as any,
+    get: (periodo: string = 'mes'): Promise<Metrica[]> => 
+      fetchWithAuth(`/api/metricas?periodo=${periodo}`) as any,
   },
   
   upload: (file: File): Promise<{ url: string }> => {

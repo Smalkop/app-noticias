@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Noticia } from '../types';
-import { Clock, User as UserIcon, ChevronLeft, Share2, Facebook, Twitter } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Clock, User as UserIcon, ChevronLeft, Share2, Facebook, Twitter, Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function Article() {
   const { id } = useParams<{ id: string }>();
   const [noticia, setNoticia] = useState<Noticia | null>(null);
   const [loading, setLoading] = useState(true);
+  const [siguiendo, setSiguiendo] = useState(false);
+  const [showShareTooltip, setShowShareTooltip] = useState(false);
 
   useEffect(() => {
     async function loadNoticia() {
@@ -17,6 +19,10 @@ export default function Article() {
       try {
         const data = await api.noticias.get(id);
         setNoticia(data);
+        
+        // Check following status
+        const { siguiendo } = await api.seguidores.getStatus(data.autor_id);
+        setSiguiendo(siguiendo);
       } catch (error) {
         console.error(error);
       } finally {
@@ -26,6 +32,36 @@ export default function Article() {
     loadNoticia();
     window.scrollTo(0, 0);
   }, [id]);
+
+  const handleFollow = async () => {
+    if (!noticia) return;
+    try {
+      if (siguiendo) {
+        await api.seguidores.unfollow(noticia.autor_id);
+        setSiguiendo(false);
+      } else {
+        await api.seguidores.follow(noticia.autor_id);
+        setSiguiendo(true);
+      }
+    } catch (error) {
+      console.error('Error with follow/unfollow:', error);
+    }
+  };
+
+  const handleShare = (platform: 'fb' | 'tw' | 'copy') => {
+    const url = window.location.href;
+    const text = noticia?.titulo || 'Mira esta noticia en ParaguayHoy';
+    
+    if (platform === 'fb') {
+      window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+    } else if (platform === 'tw') {
+      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
+    } else if (platform === 'copy') {
+      navigator.clipboard.writeText(url);
+      setShowShareTooltip(true);
+      setTimeout(() => setShowShareTooltip(false), 2000);
+    }
+  };
 
   if (loading) return <div className="max-w-4xl mx-auto p-12 h-96 bg-gray-100 animate-pulse rounded-xl mt-8"></div>;
   if (!noticia) return <div className="text-center py-20">Noticia no encontrada</div>;
@@ -75,9 +111,23 @@ export default function Article() {
                 <span>Publicado el {date}</span>
               </div>
               <div className="flex items-center gap-4 ml-auto">
-                 <button className="p-2 hover:bg-blue-50 rounded-full text-blue-600 transition-colors"><Facebook className="w-5 h-5"/></button>
-                 <button className="p-2 hover:bg-sky-50 rounded-full text-sky-500 transition-colors"><Twitter className="w-5 h-5"/></button>
-                 <button className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"><Share2 className="w-5 h-5"/></button>
+                 <button onClick={() => handleShare('fb')} className="p-2 hover:bg-blue-50 rounded-full text-blue-600 transition-colors"><Facebook className="w-5 h-5"/></button>
+                 <button onClick={() => handleShare('tw')} className="p-2 hover:bg-sky-50 rounded-full text-sky-500 transition-colors"><Twitter className="w-5 h-5"/></button>
+                 <div className="relative">
+                   <button onClick={() => handleShare('copy')} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"><Share2 className="w-5 h-5"/></button>
+                   <AnimatePresence>
+                     {showShareTooltip && (
+                       <motion.div 
+                         initial={{ opacity: 0, y: 10 }}
+                         animate={{ opacity: 1, y: 0 }}
+                         exit={{ opacity: 0 }}
+                         className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap"
+                       >
+                         ¡Copiado!
+                       </motion.div>
+                     )}
+                   </AnimatePresence>
+                 </div>
               </div>
             </div>
           </header>
@@ -106,8 +156,15 @@ export default function Article() {
             <p className="text-gray-400 text-sm leading-relaxed mb-6">
               {noticia.autor_bio || 'Periodista especializado en actualidad nacional con más de 10 años de trayectoria.'}
             </p>
-            <button className="w-full py-3 bg-red-600 rounded-lg font-bold text-sm hover:bg-red-700 transition-colors">
-              Seguir autor
+            <button 
+              onClick={handleFollow}
+              className={`w-full py-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                siguiendo 
+                  ? 'bg-gray-800 text-gray-400 border border-gray-700' 
+                  : 'bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-900/20'
+              }`}
+            >
+              {siguiendo ? <><Check className="w-4 h-4" /> Siguiendo</> : 'Seguir autor'}
             </button>
           </div>
         </aside>

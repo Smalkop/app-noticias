@@ -38,3 +38,19 @@ export interface Metrica {
   titulo: string;
   total_visitas: number;
 }
+
+export interface Notificacion {
+  id: number;
+  usuario_id: string;
+  mensaje: string;
+  leida: number;
+  tipo: 'info' | 'success' | 'warning' | 'error';
+  creado_en: string;
+}
+
+export interface Seguidor {
+  seguidor_id: string;
+  seguidor_nombre: string;
+  seguidor_foto?: string;
+  creado_en: string;
+}
