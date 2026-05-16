@@ -30,6 +30,21 @@ app.use('*', cors({
   exposeHeaders: ['Set-Cookie'],
 }));
 
+// CSP Middleware
+app.use('*', async (c, next) => {
+  await next();
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://static.cloudflareinsights.com",
+    "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://api.sendpulse.com",
+    "frame-src 'self' https://accounts.google.com",
+    "img-src 'self' data: https: *",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com"
+  ].join('; ');
+  c.header('Content-Security-Policy', csp);
+});
+
 // Error handling
 app.onError((err, c) => {
   console.error(err);
@@ -63,7 +78,7 @@ async function addToSendPulse(c: any, email: string, nombre: string) {
     const { access_token } = await authRes.json() as any;
 
     // 2. Add email to list
-    await fetch(`https://api.sendpulse.com/addressbooks/${SENDPULSE_LIST_ID}/emails`, {
+    await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${access_token}`,
