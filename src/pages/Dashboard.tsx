@@ -69,6 +69,14 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   const [requestSent, setRequestSent] = useState(false);
 
   useEffect(() => {
+    // Refresh user data on mount to catch verification status changes
+    const refreshUser = async () => {
+      try {
+        const freshUser = await api.auth.me();
+        onUserUpdate(freshUser);
+      } catch (e) {}
+    };
+    refreshUser();
     loadData();
   }, [activeTab]);
 
@@ -1293,6 +1301,41 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
               </div>
               <div className="p-6 space-y-4">
                 <div className="flex flex-wrap gap-4">
+                  <button 
+                    onClick={async () => {
+                      if(window.confirm('¿Desea sincronizar el estado de verificación con SendPulse manualmente?')) {
+                        try {
+                          const res = await fetch('/api/admin/sync-verificaciones', { method: 'POST' });
+                          const data: any = await res.json();
+                          alert(data.message || 'Sincronización completada');
+                          window.location.reload();
+                        } catch (e) { alert('Error al sincronizar usuarios'); }
+                      }
+                    }}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
+                  >
+                    <RefreshCw className="w-5 h-5" /> Sincronizar con SendPulse
+                  </button>
+
+                  <button 
+                    onClick={async () => {
+                      try {
+                        const res = await fetch('/api/admin/webhook-logs');
+                        const data: any = await res.json();
+                        if (data.length === 0) {
+                          alert('No hay logs de webhooks registrados aún.');
+                        } else {
+                          const logSummary = data.map((l: any) => `[${l.creado_en}] ${l.payload}`).join('\n\n---\n\n');
+                          console.log('Webhook Logs:', data);
+                          alert('Logs mostrados en consola (F12) para mejor lectura.\n\nÚltimos logs:\n' + logSummary.substring(0, 1000) + '...');
+                        }
+                      } catch (e) { alert('Error al cargar logs'); }
+                    }}
+                    className="bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center gap-2"
+                  >
+                    <Activity className="w-5 h-5" /> Ver Logs de Webhook
+                  </button>
+
                   <button 
                     onClick={async () => {
                       if(window.confirm('¿Desea limpiar los usuarios no verificados que tienen más de 24 horas?')) {

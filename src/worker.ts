@@ -562,36 +562,143 @@ app.post('/api/webhook/sendpulse', async (c) => {
 
     console.log('SendPulse Webhook Received:', JSON.stringify(body));
     
+    // Log for debugging
+    try {
+      await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)').bind(JSON.stringify(body)).run();
+    } catch (e) {
+      console.error('Failed to log webhook:', e);
+    }
+    
     // SendPulse can send an array or a single object
     const events = Array.isArray(body) ? body : [body];
     
     for (const event of events) {
-      // SendPulse events often have the email at the top level or inside a nested structure
-      const email = event.email || (event.data && event.data.email) || event.variable?.find?.((v: any) => v.name === 'email')?.value;
+      // Normalizar búsqueda de email: top level, data.email, variables, etc.
+      let emailRaw = event.email || (event.data && event.data.email);
       
-      if (email) {
-        // Find user and update
-        const result = await c.env.DB.prepare('UPDATE usuarios SET verificado = 1 WHERE email = ?')
+      // Si no está fácil, buscar en variables
+      if (!emailRaw && event.variables) {
+        if (typeof event.variables === 'string') {
+          // A veces viene como string JSON
+          try {
+            const v = JSON.parse(event.variables);
+            emailRaw = v.email || v.Email;
+          } catch(e) {}
+        } else {
+          emailRaw = event.variables.email || event.variables.Email;
+        }
+      }
+
+      if (emailRaw) {
+        const email = emailRaw.toString().trim();
+        // Usar LOWER para evitar problemas de capitalización
+        console.log(`Intentando verificar email: ${email}`);
+        
+        const result = await c.env.DB.prepare('UPDATE usuarios SET verificado = 1 WHERE LOWER(email) = LOWER(?)')
           .bind(email).run();
         
         if (result.meta.changes > 0) {
-          console.log(`Usuario verificado vía webhook: ${email}`);
+          console.log(`Usuario verificado con éxito vía webhook: ${email}`);
           
-          // Also create a notification for the user
-          const user: any = await c.env.DB.prepare('SELECT id FROM usuarios WHERE email = ?').bind(email).first();
+          const user: any = await c.env.DB.prepare('SELECT id FROM usuarios WHERE LOWER(email) = LOWER(?)').bind(email).first();
           if (user) {
             await c.env.DB.prepare(`
               INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, leida)
-              VALUES (?, ?, ?, ?, 0)
-            `).bind(user.id, '¡Cuenta Verificada!', 'Tu correo electrónico ha sido verificado con éxito.', 'sistema').run();
+              VALUES (?, '¡Cuenta Verificada!', 'Tu correo electrónico ha sido verificado con éxito.', 'sistema', 0)
+            `).bind(user.id).run();
           }
+        } else {
+          console.log(`Webhook no encontró usuario para: ${email} (o ya estaba verificado)`);
         }
+      } else {
+        console.log('Webhook no contenía email identificable:', JSON.stringify(event));
       }
     }
-    return c.json({ ok: true });
+    return c.json({ ok: true, message: 'Processed' });
   } catch (err: any) {
     console.error('Webhook Error:', err.message);
     return c.json({ ok: false, error: err.message }, 500);
+  }
+});
+
+// Admin: Get webhook logs
+app.get('/api/admin/webhook-logs', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256') as any;
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    const logs: any = await c.env.DB.prepare('SELECT * FROM webhook_logs ORDER BY creado_en DESC LIMIT 50').all();
+    return c.json(logs.results || []);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// Admin: Sync verification status with SendPulse
+app.post('/api/admin/sync-verificaciones', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256') as any;
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    // 1. Get unverified users
+    const unverifiedUsers: any = await c.env.DB.prepare('SELECT id, email FROM usuarios WHERE verificado = 0').all();
+    
+    if (!unverifiedUsers.results || unverifiedUsers.results.length === 0) {
+      return c.json({ message: 'No hay usuarios pendientes de verificación', synced: 0 });
+    }
+
+    // 2. Get SendPulse Token
+    const spId = c.env['id sendpulse'];
+    const spSecret = c.env['secret sendpulse'];
+    const spListId = c.env.SENDPULSE_LIST_ID;
+    
+    const authRes = await fetch('https://api.sendpulse.com/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grant_type: 'client_credentials', client_id: spId, client_secret: spSecret })
+    });
+    
+    if (!authRes.ok) return c.json({ error: 'Error de autenticación con SendPulse' }, 500);
+    const { access_token } = await authRes.json() as any;
+
+    let syncCount = 0;
+    const details = [];
+
+    // 3. Check each user in SendPulse
+    for (const user of unverifiedUsers.results) {
+      const spUserRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails/${encodeURIComponent(user.email)}`, {
+        headers: { 'Authorization': `Bearer ${access_token}` }
+      });
+
+      if (spUserRes.ok) {
+        const spUserData = await spUserRes.json() as any;
+        // SendPulse "status" codes: 
+        // 0 – active
+        // 1 – unconfirmed
+        // 2 – unsubscribed
+        // etc.
+        // We look for status 0 (active)
+        if (spUserData && spUserData.status === 0) {
+          await c.env.DB.prepare('UPDATE usuarios SET verificado = 1 WHERE id = ?').bind(user.id).run();
+          syncCount++;
+          details.push({ email: user.email, status: 'Synced' });
+        } else {
+          details.push({ email: user.email, status: `In list but status ${spUserData?.status ?? 'unknown'}` });
+        }
+      } else {
+        details.push({ email: user.email, status: 'Not found in SendPulse list' });
+      }
+    }
+
+    return c.json({ message: `Sincronización completada. Usuarios verificados: ${syncCount}`, synced: syncCount, details });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
   }
 });
 
@@ -636,6 +743,11 @@ app.post('/api/admin/limpiar-usuarios', async (c) => {
 app.get('/api/setup-db', async (c) => {
   try {
     await c.env.DB.batch([
+      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS webhook_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        payload TEXT,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`),
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS usuarios (
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
