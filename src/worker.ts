@@ -1094,6 +1094,13 @@ app.get('/api/admin/test-sendpulse', async (c) => {
 
     const { access_token } = await authRes.json() as any;
 
+    // ELIMINAR para prueba limpia: Si existe, lo borramos para forzar nueva confirmación
+    await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emails: [email] })
+    });
+
     // Check list
     const listRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}`, {
       headers: { 'Authorization': `Bearer ${access_token}` }
@@ -1112,10 +1119,12 @@ app.get('/api/admin/test-sendpulse', async (c) => {
     });
     const checkUser = checkRes.ok ? await checkRes.json() : { error: 'Not found or fail', status: checkRes.status };
 
-    // Try adding test email with the winning strategy
+    // Try adding test email with several variations to find the one that triggers the template
     const templateId = "44146dba-5aa2-4639-9198-d716abf985d8";
     const strategies = [
-      { name: 'Winning Strategy (id_template)', body: { emails: [email], id_template: templateId } }
+      { name: 'ST: id_template', body: { emails: [email], id_template: templateId } },
+      { name: 'ST: template_id', body: { emails: [email], template_id: templateId } },
+      { name: 'ST: confirmation (UUID)', body: { emails: [email], confirmation: templateId } }
     ];
 
     const results = [];

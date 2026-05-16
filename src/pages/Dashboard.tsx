@@ -1302,13 +1302,15 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                         const res = await fetch('/api/admin/test-sendpulse');
                         const data: any = await res.json();
                         if (res.ok) {
-                          let summary = `Resumen de Configuración:\nLista: ${data.list?.name || 'N/A'}\n`;
-                          summary += `Estado Usuario: ${data.currentUserStatus?.email ? 'EXISTE ✅' : 'NO EXISTE ❌'}\n\n`;
+                          const listData = Array.isArray(data.list) ? data.list[0] : data.list;
+                          let summary = `Resumen de Configuración:\nLista: ${listData?.name || 'N/A'}\n`;
+                          summary += `Estado Usuario Anterior: ${data.currentUserStatus?.email ? 'EXISTE ✅' : 'NO EXISTE ❌'}\n\n`;
                           
                           if (data.results && data.results.length > 0) {
                             const mainRes = data.results[0];
-                            summary += `Prueba de Envío: ${mainRes.status === 200 ? 'EXITOSA ✅' : 'FALLIDA ❌'}\n`;
-                            summary += `Mensaje API: ${JSON.stringify(mainRes.data)}\n`;
+                            summary += `Prueba de Re-inscripción: ${mainRes.status === 200 ? 'EXITOSA ✅' : 'FALLIDA ❌'}\n`;
+                            summary += `Mensaje API: ${JSON.stringify(mainRes.data)}\n\n`;
+                            summary += `IMPORTANTE: Se ha intentado re-inscribir tu correo. Revisa tu bandeja de entrada (y SPAM) para el correo de confirmación.`;
                           }
                           alert(summary);
                           console.log('Diagnostic full data:', data);
