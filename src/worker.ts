@@ -48,8 +48,98 @@ app.use('*', async (c, next) => {
 // Error handling
 app.onError((err, c) => {
   console.error(err);
-  return c.json({ error: 'Error interno del servidor', message: err.message, name: err.name }, 500);
+  // Do not expose internal error details to the client in production
+  const message = process.env.NODE_ENV === 'development' ? err.message : 'Ocurrió un error inesperado';
+  return c.json({ error: 'Error interno del servidor', message }, 500);
 });
+
+// Sanitization helper to prevent XSS
+function sanitize(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Password validation helper
+function isPasswordSafe(password: string): boolean {
+  // Min 8 characters, upper, lower, number, special char
+  const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+  return regex.test(password);
+}
+
+// Hashing Helpers using Web Crypto API (PBKDF2)
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(password),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits', 'deriveKey']
+  );
+  const key = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    256
+  );
+  
+  const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+  const hashArray = Array.from(new Uint8Array(key));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  return `${saltHex}:${hashHex}`;
+}
+
+async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  if (!storedHash) return false;
+  
+  // If the hash doesn't follow our secure format, it might be an old plain text password
+  if (!storedHash.includes(':')) {
+    return password === storedHash;
+  }
+  
+  const [saltHex, originalHashHex] = storedHash.split(':');
+  try {
+    const salt = new Uint8Array(saltHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+    
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(password),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveBits', 'deriveKey']
+    );
+    const key = await crypto.subtle.deriveBits(
+      {
+        name: 'PBKDF2',
+        salt: salt,
+        iterations: 100000,
+        hash: 'SHA-256',
+      },
+      keyMaterial,
+      256
+    );
+    
+    const hashHex = Array.from(new Uint8Array(key))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+      
+    return hashHex === originalHashHex;
+  } catch (e) {
+    return false;
+  }
+}
 
 // Helper for SendPulse
 async function addToSendPulse(c: any, email: string, nombre: string, phone?: string) {
@@ -198,14 +288,19 @@ app.get('/api/auth/me', async (c) => {
 app.post('/api/auth/login', async (c) => {
   try {
     const { email, password } = await c.req.json();
+    if (!email || !password) {
+      return c.json({ error: 'Email y contraseña son obligatorios' }, 400);
+    }
+
     const user: any = await c.env.DB.prepare('SELECT * FROM usuarios WHERE email = ?').bind(email).first();
 
     if (!user) {
-      return c.json({ error: 'Usuario no encontrado' }, 401);
+      return c.json({ error: 'Credenciales inválidas' }, 401);
     }
     
-    if (user.password_hash !== password) {
-      return c.json({ error: 'Contraseña incorrecta' }, 401);
+    const isValid = await verifyPassword(password, user.password_hash);
+    if (!isValid) {
+      return c.json({ error: 'Credenciales inválidas' }, 401);
     }
 
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
@@ -245,25 +340,37 @@ app.post('/api/auth/registro', async (c) => {
       return c.json({ error: 'Faltan campos obligatorios (email, password, nombre)' }, 400);
     }
 
+    // Sanitization
+    const cleanNombre = sanitize(nombre.trim());
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Password validation
+    if (!isPasswordSafe(password)) {
+      return c.json({ 
+        error: 'La contraseña no es segura. Debe tener al menos 8 caracteres, incluir mayúsculas, minúsculas, números y caracteres especiales (@$!%*?&).' 
+      }, 400);
+    }
+
     const id = crypto.randomUUID();
+    const hashedPassword = await hashPassword(password);
     
-    // Default role: if email is brahiangonzalez300@gmail.com, set as admin
-    const rol = email === 'brahiangonzalez300@gmail.com' ? 'admin' : 'suscriptor';
+    // Default role: if email matches admin, set as admin
+    const rol = cleanEmail === 'brahiangonzalez300@gmail.com' ? 'admin' : 'suscriptor';
     
     await c.env.DB.prepare(
       'INSERT INTO usuarios (id, email, password_hash, nombre, rol, verificado) VALUES (?, ?, ?, ?, ?, 0)'
-    ).bind(id, email, password, nombre, rol).run();
+    ).bind(id, cleanEmail, hashedPassword, cleanNombre, rol).run();
 
     // Add to SendPulse in background
-    c.executionCtx.waitUntil(addToSendPulse(c, email, nombre));
+    c.executionCtx.waitUntil(addToSendPulse(c, cleanEmail, cleanNombre));
 
-    return c.json({ id, email, nombre, rol, verificado: 0 }, 201);
+    return c.json({ id, email: cleanEmail, nombre: cleanNombre, rol, verificado: 0 }, 201);
   } catch (error: any) {
     console.error('Registration Error:', error);
     if (error.message.includes('UNIQUE constraint failed')) {
       return c.json({ error: 'El email ya está registrado' }, 400);
     }
-    return c.json({ error: 'Error al registrar usuario', details: error.message }, 400);
+    return c.json({ error: 'Error al registrar usuario. Asegúrese de que los datos sean correctos.' }, 400);
   }
 });
 
