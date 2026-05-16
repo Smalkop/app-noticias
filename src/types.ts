@@ -50,14 +50,15 @@ export interface Metrica {
   id?: string;
   titulo: string;
   total_visitas: number;
-  vistas_unicas: number;
-  fuentes: { directo: number; redes: number; buscador: number };
-  dispositivos: { mobile: number; desktop: number };
-  tiempo_medio: number;
-  scroll_medio: number;
-  rebotes: number;
-  interacciones: number;
-  compartidos: number;
+  vistas_unicas?: number;
+  fuentes?: { directo: number; redes: number; buscador: number };
+  dispositivos?: { mobile: number; desktop: number };
+  tiempo_medio?: number;
+  scroll_medio?: number;
+  rebotes?: number;
+  interacciones?: number;
+  compartidos?: number;
+  public_only?: boolean;
 }
 
 export interface Notificacion {

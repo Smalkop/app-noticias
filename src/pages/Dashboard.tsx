@@ -15,6 +15,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { compressImage } from '../lib/imageUtils';
 import { Seguidor, Notificacion } from '../types';
+import PhoneInput from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
 
 interface DashboardProps {
   user: User;
@@ -465,81 +467,95 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                         icon={<Eye className="w-5 h-5"/>} 
                         label="Alcance" 
                         value={selectedMetrica.total_visitas} 
-                        subValue={`${selectedMetrica.vistas_unicas || 0} únicas`} 
+                        subValue={selectedMetrica.public_only ? 'Vistas totales' : `${selectedMetrica.vistas_unicas || 0} únicas`} 
                         color="red"
                       />
-                      <MetricCard 
-                        icon={<Clock className="w-5 h-5"/>} 
-                        label="Calidad" 
-                        value={`${selectedMetrica.tiempo_medio || 0}s`} 
-                        subValue={`Rebotes: ${selectedMetrica.rebotes || 0}%`} 
-                        color="blue"
-                      />
-                      <MetricCard 
-                        icon={<Activity className="w-5 h-5"/>} 
-                        label="Engagement" 
-                        value={`${selectedMetrica.scroll_medio || 0}%`} 
-                        subValue={`${selectedMetrica.interacciones || 0} reacciones`} 
-                        color="purple"
-                      />
-                      <MetricCard 
-                        icon={<Share2 className="w-5 h-5"/>} 
-                        label="Lealtad" 
-                        value={selectedMetrica.compartidos || 0} 
-                        subValue="Veces compartido" 
-                        color="amber"
-                      />
+                      {!selectedMetrica.public_only && (
+                        <>
+                          <MetricCard 
+                            icon={<Clock className="w-5 h-5"/>} 
+                            label="Calidad" 
+                            value={`${selectedMetrica.tiempo_medio || 0}s`} 
+                            subValue={`Rebotes: ${selectedMetrica.rebotes || 0}%`} 
+                            color="blue"
+                          />
+                          <MetricCard 
+                            icon={<Activity className="w-5 h-5"/>} 
+                            label="Engagement" 
+                            value={`${selectedMetrica.scroll_medio || 0}%`} 
+                            subValue={`${selectedMetrica.interacciones || 0} reacciones`} 
+                            color="purple"
+                          />
+                          <MetricCard 
+                            icon={<Share2 className="w-5 h-5"/>} 
+                            label="Lealtad" 
+                            value={selectedMetrica.compartidos || 0} 
+                            subValue="Veces compartido" 
+                            color="amber"
+                          />
+                        </>
+                      )}
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-                         <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-8 flex items-center gap-2">
-                           <Globe className="w-4 h-4"/> Fuentes de Tráfico
-                         </h3>
-                         <div className="h-64">
-                           <ResponsiveContainer width="100%" height="100%">
-                             <PieChart>
-                               <Pie
-                                 data={[
-                                   { name: 'Directo', value: selectedMetrica.fuentes?.directo || 0 },
-                                   { name: 'Redes', value: selectedMetrica.fuentes?.redes || 0 },
-                                   { name: 'Buscador', value: selectedMetrica.fuentes?.buscador || 0 },
-                                 ]}
-                                 innerRadius={60}
-                                 outerRadius={80}
-                                 paddingAngle={5}
-                                 dataKey="value"
-                               >
-                                 {['#ef4444', '#1f2937', '#6b7280'].map((color, index) => (
-                                   <Cell key={`cell-${index}`} fill={color} />
-                                 ))}
-                               </Pie>
-                               <ReTooltip />
-                             </PieChart>
-                           </ResponsiveContainer>
+                    {!selectedMetrica.public_only ? (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+                           <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-8 flex items-center gap-2">
+                             <Globe className="w-4 h-4"/> Fuentes de Tráfico
+                           </h3>
+                           <div className="h-64">
+                             <ResponsiveContainer width="100%" height="100%">
+                               <PieChart>
+                                 <Pie
+                                   data={[
+                                     { name: 'Directo', value: selectedMetrica.fuentes?.directo || 0 },
+                                     { name: 'Redes', value: selectedMetrica.fuentes?.redes || 0 },
+                                     { name: 'Buscador', value: selectedMetrica.fuentes?.buscador || 0 },
+                                   ]}
+                                   innerRadius={60}
+                                   outerRadius={80}
+                                   paddingAngle={5}
+                                   dataKey="value"
+                                 >
+                                   {['#ef4444', '#1f2937', '#6b7280'].map((color, index) => (
+                                     <Cell key={`cell-${index}`} fill={color} />
+                                   ))}
+                                 </Pie>
+                                 <ReTooltip />
+                               </PieChart>
+                             </ResponsiveContainer>
+                           </div>
                          </div>
-                       </div>
 
-                       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-                         <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-8 flex items-center gap-2">
-                           <Smartphone className="w-4 h-4"/> Segmentación Dispositivo
-                         </h3>
-                         <div className="h-64">
-                           <ResponsiveContainer width="100%" height="100%">
-                             <BarChart data={[
-                               { name: 'Móvil', value: selectedMetrica.dispositivos?.mobile || 0 },
-                               { name: 'Desktop', value: selectedMetrica.dispositivos?.desktop || 0 },
-                             ]}>
-                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 700 }} />
-                               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                               <ReTooltip />
-                               <Bar dataKey="value" fill="#ef4444" radius={[8, 8, 0, 0]} />
-                             </BarChart>
-                           </ResponsiveContainer>
+                         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+                           <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-8 flex items-center gap-2">
+                             <Smartphone className="w-4 h-4"/> Segmentación Dispositivo
+                           </h3>
+                           <div className="h-64">
+                             <ResponsiveContainer width="100%" height="100%">
+                               <BarChart data={[
+                                 { name: 'Móvil', value: selectedMetrica.dispositivos?.mobile || 0 },
+                                 { name: 'Desktop', value: selectedMetrica.dispositivos?.desktop || 0 },
+                               ]}>
+                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 700 }} />
+                                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                                 <ReTooltip />
+                                 <Bar dataKey="value" fill="#ef4444" radius={[8, 8, 0, 0]} />
+                               </BarChart>
+                             </ResponsiveContainer>
+                           </div>
                          </div>
-                       </div>
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-50 p-8 rounded-2xl border border-gray-200 flex items-center gap-4">
+                        <ShieldAlert className="w-6 h-6 text-red-500" />
+                        <div>
+                          <p className="font-bold text-gray-900">Métricas avanzadas protegidas</p>
+                          <p className="text-sm text-gray-500">Solo el autor de esta publicación puede ver estadísticas detalladas de comportamiento y retención.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1029,13 +1045,16 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">Teléfono (Opcional)</label>
-                    <input 
-                      type="tel" 
-                      placeholder="+595 9xx xxx xxx"
-                      value={telefono}
-                      onChange={(e) => setTelefono(e.target.value)}
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none"
-                    />
+                    <div className="phone-input-container">
+                      <PhoneInput
+                        placeholder="Ej: +595 9xx xxx xxx"
+                        value={telefono}
+                        onChange={(val) => setTelefono(val || '')}
+                        defaultCountry="PY"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-red-500 outline-none transition-all"
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-wider">Esencial para recibir alertas de noticias de último momento.</p>
                   </div>
 
                   <div>

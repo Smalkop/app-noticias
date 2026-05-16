@@ -187,7 +187,7 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
     };
     if (phone) {
       emailData.variables.phone = phone;
-      emailData.variables.Telefono = phone;
+      emailData.variables['Teléfono'] = phone;
     }
 
     // 3. Enviar a la lista con la estructura exacta de la documentación
@@ -641,12 +641,10 @@ app.post('/api/usuario/perfil', async (c) => {
       WHERE id = ?
     `).bind(nombre, bio, foto_perfil, telefono, payload.id).run();
 
-    // If telefono was updated, sync with SendPulse
-    if (telefono) {
-      const user: any = await c.env.DB.prepare('SELECT email, nombre FROM usuarios WHERE id = ?').bind(payload.id).first();
-      if (user) {
-        c.executionCtx.waitUntil(addToSendPulse(c, user.email, user.nombre, telefono));
-      }
+    // Sync with SendPulse (always sync if we have the user)
+    const user: any = await c.env.DB.prepare('SELECT email, nombre, telefono FROM usuarios WHERE id = ?').bind(payload.id).first();
+    if (user) {
+      c.executionCtx.waitUntil(addToSendPulse(c, user.email, user.nombre, user.telefono));
     }
 
     return c.json({ message: 'Perfil actualizado' });
@@ -1917,6 +1915,31 @@ app.get('/api/metricas', async (c) => {
     if (periodo === 'año') dateFilter = "datetime('now', '-1 year')";
 
     if (noticiaId) {
+      // PRIVACY CHECK: Only author or admin can see detailed metrics
+      const newsInfo: any = await c.env.DB.prepare('SELECT autor_id FROM noticias WHERE id = ?').bind(noticiaId).first();
+      if (!newsInfo) return c.json({ error: 'Noticia no encontrada' }, 404);
+
+      if (newsInfo.autor_id !== payload.id && payload.rol !== 'admin') {
+        // Return only public views for others
+        const publicStats: any = await c.env.DB.prepare(`
+          SELECT 
+            n.titulo,
+            COUNT(m.id) as total_visitas
+          FROM noticias n
+          LEFT JOIN metricas_visitas m ON n.id = m.noticia_id AND m.fecha >= ${dateFilter}
+          WHERE n.id = ?
+          GROUP BY n.id
+        `).bind(noticiaId).first();
+
+        if (!publicStats) return c.json([]);
+
+        return c.json([{
+          titulo: publicStats.titulo,
+          total_visitas: publicStats.total_visitas || 0,
+          public_only: true
+        }]);
+      }
+
       const stats: any = await c.env.DB.prepare(`
         SELECT 
           n.titulo,
