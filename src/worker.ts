@@ -58,11 +58,17 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
   const spListId = c.env.SENDPULSE_LIST_ID;
   
   if (!spId || !spSecret || !spListId) {
-    console.error('SendPulse Error: Missing credentials or list ID', { hasId: !!spId, hasSecret: !!spSecret, hasListId: !!spListId });
-    return;
+    console.error('SendPulse Error: Credenciales o ID de lista faltantes', { 
+      hasId: !!spId, 
+      hasSecret: !!spSecret, 
+      hasListId: !!spListId,
+      listId: spListId
+    });
+    return { success: false, error: 'Credenciales faltantes en el servidor' };
   }
 
   try {
+    // 1. Obtener Token
     const authRes = await fetch('https://api.sendpulse.com/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -75,20 +81,26 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
     
     if (!authRes.ok) {
       const errText = await authRes.text();
-      throw new Error(`SendPulse auth failed: ${authRes.status} ${errText}`);
+      console.error('SendPulse Auth Error:', errText);
+      return { success: false, error: `Error de Auth: ${authRes.status}` };
     }
     
     const { access_token } = await authRes.json() as any;
 
+    // 2. Preparar datos (SendPulse es sensible a los nombres de variables)
     const emailData: any = {
       email,
       variables: { 
-        'name': nombre,
-        'Nombre': nombre 
+        'Nombre': nombre,
+        'name': nombre
       }
     };
-    if (phone) emailData.variables.phone = phone;
+    if (phone) {
+      emailData.variables.phone = phone;
+      emailData.variables.Telefono = phone;
+    }
 
+    // 3. Enviar a la lista
     const spRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
       method: 'POST',
       headers: {
@@ -97,22 +109,25 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
       },
       body: JSON.stringify({
         emails: [emailData],
-        confirmation: 1 // Trigger verification email
+        confirmation: 1 // Forzar envío de correo de confirmación
       })
     });
 
+    const result = await spRes.json() as any;
     if (!spRes.ok) {
-      const errText = await spRes.text();
-      console.error(`SendPulse Add Email Error: ${spRes.status}`, errText);
-    } else {
-      console.log(`SendPulse: Usuario ${email} enviado con éxito a la lista ${spListId}`);
+      console.error('SendPulse API Error:', result);
+      return { success: false, error: result.message || 'Error desconocido API' };
     }
-  } catch (error) {
+
+    console.log(`SendPulse Success para ${email}:`, result);
+    return { success: true, result };
+  } catch (error: any) {
     console.error('SendPulse Exception:', error);
+    return { success: false, error: error.message };
   }
 }
 
-// Helper to remove from SendPulse
+// ... despues de remover de sendpulse
 async function removeFromSendPulse(c: any, email: string) {
   const spId = c.env['id sendpulse'];
   const spSecret = c.env['secret sendpulse'];
@@ -1014,6 +1029,31 @@ app.get('/api/admin/fix-cascades', async (c) => {
     await c.env.DB.exec('PRAGMA foreign_keys = ON;');
 
     return c.json({ message: 'Foreign Keys actualizadas con CASCADE' });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// Admin: Sync User to SendPulse Manually
+app.post('/api/admin/usuarios/:id/sync-sendpulse', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  const targetId = c.req.param('id');
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256');
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    const user: any = await c.env.DB.prepare('SELECT email, nombre, telefono FROM usuarios WHERE id = ?').bind(targetId).first();
+    if (!user) return c.json({ error: 'Usuario no encontrado' }, 404);
+
+    const result = await addToSendPulse(c, user.email, user.nombre, user.telefono);
+    
+    if (result.success) {
+      return c.json({ message: 'Sincronización exitosa', result: result.result });
+    } else {
+      return c.json({ error: 'Error en sincronización', details: result.error }, 500);
+    }
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }

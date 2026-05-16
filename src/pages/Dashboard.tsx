@@ -319,6 +319,20 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
     }
   };
 
+  const handleSyncSendPulse = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/usuarios/${id}/sync-sendpulse`, { method: 'POST' });
+      const data: any = await res.json();
+      if (res.ok) {
+        alert('Sincronización exitosa: ' + (data.message || 'Usuario enviado'));
+      } else {
+        alert('Error: ' + (data.error || 'No se pudo sincronizar') + '\n' + (data.details || ''));
+      }
+    } catch (e) {
+      alert('Error de conexión');
+    }
+  };
+
   const handleDeleteUser = async (id: string) => {
     if (!confirm('¿Estás seguro de eliminar este usuario? Se borrarán todas sus noticias y reacciones (CASCADE).')) return;
     try {
@@ -1137,6 +1151,13 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                         </div>
                         <div className="flex gap-2">
                           <button 
+                            onClick={() => handleSyncSendPulse(u.id)}
+                            title="Sincronizar con SendPulse"
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                          >
+                            <RefreshCw className="w-5 h-5" />
+                          </button>
+                          <button 
                             onClick={() => setEditingUser(u)}
                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           >
@@ -1276,19 +1297,22 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
                   <button 
                     onClick={async () => {
+                      if(!window.confirm('Se enviará un correo de prueba a su dirección actual (si está registrada). ¿Continuar?')) return;
                       try {
                         const res = await fetch('/api/admin/test-sendpulse');
                         const data: any = await res.json();
                         if (res.ok) {
-                          alert(`Éxito: ${data.message}\nLista: ${data.list?.name || 'ID ' + data.list?.id}\nResultado: ${JSON.stringify(data.addResult)}`);
+                          alert(`Éxito: ${data.message}\nNombre Lista: ${data.list?.name || 'N/A'}\nDetalles: ${JSON.stringify(data.addResult)}`);
                         } else {
-                          alert(`Error: ${data.error}\nDetalles: ${data.details || ''}`);
+                          // Crucial: Show exact error from server
+                          alert(`Error: ${data.error}\nDetalles técnicos: ${data.details || 'Ver consola'}`);
+                          console.error('Test SendPulse fail:', data);
                         }
-                      } catch (e) { alert('Error al probar SendPulse'); }
+                      } catch (e) { alert('Error de conexión con el servidor'); }
                     }}
                     className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 transition-all flex items-center gap-2"
                   >
-                    <Bell className="w-5 h-5" /> Probar SendPulse
+                    <Bell className="w-5 h-5" /> Probar SendPulse (Diagnóstico)
                   </button>
 
                   <button 
