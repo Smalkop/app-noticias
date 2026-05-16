@@ -814,9 +814,29 @@ app.delete('/api/admin/usuarios/:id', async (c) => {
     const user: any = await c.env.DB.prepare('SELECT email FROM usuarios WHERE id = ?').bind(targetId).first();
     if (!user) return c.json({ error: 'Usuario no encontrado' }, 404);
 
-    // Turn on Foreign Keys just in case
-    await c.env.DB.exec('PRAGMA foreign_keys = ON;');
+    // Manual cascading delete to be absolutely sure
+    // 1. Delete notifications
+    await c.env.DB.prepare('DELETE FROM notificaciones WHERE usuario_id = ?').bind(targetId).run();
+    // 2. Delete reactions (direct)
+    await c.env.DB.prepare('DELETE FROM reacciones WHERE usuario_id = ?').bind(targetId).run();
+    // 3. Delete followers/following
+    await c.env.DB.prepare('DELETE FROM seguidores WHERE seguidor_id = ? OR autor_id = ?').bind(targetId, targetId).run();
+    // 4. Delete author requests
+    await c.env.DB.prepare('DELETE FROM solicitudes_autor WHERE usuario_id = ?').bind(targetId).run();
     
+    // 5. Delete things related to news by this author
+    // Get news IDs
+    const { results: news }: any = await c.env.DB.prepare('SELECT id FROM noticias WHERE autor_id = ?').bind(targetId).all();
+    if (news && news.length > 0) {
+      for (const n of news) {
+        await c.env.DB.prepare('DELETE FROM metricas_visitas WHERE noticia_id = ?').bind(n.id).run();
+        await c.env.DB.prepare('DELETE FROM reacciones WHERE noticia_id = ?').bind(n.id).run();
+        await c.env.DB.prepare('DELETE FROM noticia_shares WHERE noticia_id = ?').bind(n.id).run();
+        await c.env.DB.prepare('DELETE FROM noticias WHERE id = ?').bind(n.id).run();
+      }
+    }
+    
+    // Finally delete the user
     await c.env.DB.prepare('DELETE FROM usuarios WHERE id = ?').bind(targetId).run();
     
     // Remove from SendPulse
@@ -1156,6 +1176,11 @@ app.delete('/api/noticias/:id', async (c) => {
     if (existing.autor_id !== payload.id && payload.rol !== 'admin') {
       return c.json({ error: 'No tienes permiso para eliminar esta noticia' }, 403);
     }
+
+    // Manual cascade for noticia children
+    await c.env.DB.prepare('DELETE FROM metricas_visitas WHERE noticia_id = ?').bind(newsId).run();
+    await c.env.DB.prepare('DELETE FROM reacciones WHERE noticia_id = ?').bind(newsId).run();
+    await c.env.DB.prepare('DELETE FROM noticia_shares WHERE noticia_id = ?').bind(newsId).run();
 
     await c.env.DB.prepare('DELETE FROM noticias WHERE id = ?').bind(newsId).run();
     return c.json({ message: 'Noticia eliminada correctamente' });
