@@ -1297,17 +1297,19 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
                   <button 
                     onClick={async () => {
-                      if(!window.confirm('Se realizará un diagnóstico profundo de SendPulse probando 4 estrategias diferentes. ¿Continuar?')) return;
+                      if(!window.confirm('Se realizará una prueba de envío de confirmación a tu correo. ¿Continuar?')) return;
                       try {
                         const res = await fetch('/api/admin/test-sendpulse');
                         const data: any = await res.json();
                         if (res.ok) {
-                          let summary = `Resultados del Diagnóstico:\nLista: ${data.list?.name || 'N/A'}\n`;
-                          summary += `Usuario actual en lista: ${data.currentUserStatus?.email ? 'EXISTE ✅' : 'NO EXISTE ❌'} (${data.currentUserStatus?.status === 1 ? 'Confirmado' : 'Pendiente'})\n\n`;
+                          let summary = `Resumen de Configuración:\nLista: ${data.list?.name || 'N/A'}\n`;
+                          summary += `Estado Usuario: ${data.currentUserStatus?.email ? 'EXISTE ✅' : 'NO EXISTE ❌'}\n\n`;
                           
-                          data.results.forEach((r: any) => {
-                            summary += `ST: ${r.strategy}\nStatus: ${r.status} ${r.ok ? '✅' : '❌'}\nRes: ${JSON.stringify(r.data)}\n\n`;
-                          });
+                          if (data.results && data.results.length > 0) {
+                            const mainRes = data.results[0];
+                            summary += `Prueba de Envío: ${mainRes.status === 200 ? 'EXITOSA ✅' : 'FALLIDA ❌'}\n`;
+                            summary += `Mensaje API: ${JSON.stringify(mainRes.data)}\n`;
+                          }
                           alert(summary);
                           console.log('Diagnostic full data:', data);
                         } else {

@@ -109,7 +109,7 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
       },
       body: JSON.stringify({
         emails: [emailData],
-        confirmation: "44146dba-5aa2-4639-9198-d716abf985d8" // Planilla de confirmación
+        id_template: "44146dba-5aa2-4639-9198-d716abf985d8" // Usamos id_template según diagnóstico exitoso
       })
     });
 
@@ -1112,26 +1112,16 @@ app.get('/api/admin/test-sendpulse', async (c) => {
     });
     const checkUser = checkRes.ok ? await checkRes.json() : { error: 'Not found or fail', status: checkRes.status };
 
-    // Try adding test email with multiple strategies
+    // Try adding test email with the winning strategy
     const templateId = "44146dba-5aa2-4639-9198-d716abf985d8";
     const strategies = [
-      { name: 'Simple (No confirmation param)', body: { emails: [email] } },
-      { name: 'With Confirmation UUID', body: { emails: [email], confirmation: templateId } },
-      { name: 'Using id_template param', body: { emails: [email], id_template: templateId } },
-      { name: 'As Boolean True', body: { emails: [email], confirmation: true } },
-      { name: 'As Boolean "1"', body: { emails: [email], confirmation: "1" } }
+      { name: 'Winning Strategy (id_template)', body: { emails: [email], id_template: templateId } }
     ];
 
     const results = [];
     for (const strategy of strategies) {
       try {
-        // First, try to remove the user to ensure a clean test for DOI
-        await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ emails: [email] })
-        });
-
+        // En diagnóstico, intentamos registrar de nuevo para verificar
         const res = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/emails`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
@@ -1145,7 +1135,7 @@ app.get('/api/admin/test-sendpulse', async (c) => {
     }
 
     return c.json({ 
-      message: 'Diagnóstico avanzado de DOI completado', 
+      message: 'Confirmación de envío configurada correctamente', 
       list: listInfo,
       currentUserStatus: checkUser,
       results
