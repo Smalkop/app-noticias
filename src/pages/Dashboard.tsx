@@ -30,7 +30,20 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   const [solicitudes, setSolicitudes] = useState<any[]>([]);
   const [seguidores, setSeguidores] = useState<Seguidor[]>([]);
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Fetch unread count globally
+  const fetchUnreadCount = async () => {
+    try {
+      const allNotics = await api.notificaciones.list();
+      setUnreadCount(allNotics.filter(n => !n.leida).length);
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+  }, []);
   const [activeTab, setActiveTab] = useState<'metrics' | 'create' | 'manage' | 'profile' | 'admin' | 'notifications' | 'users'>('metrics');
   const [metricPeriod, setMetricPeriod] = useState('mes');
   const [selectedMetrica, setSelectedMetrica] = useState<Metrica | null>(null);
@@ -427,9 +440,10 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
           )}
           <TabButton 
             active={activeTab === 'notifications'} 
-            onClick={() => setActiveTab('notifications')} 
+            onClick={() => { setActiveTab('notifications'); setUnreadCount(0); }} 
             icon={<Bell className="w-4 h-4" />} 
             label="Notificaciones" 
+            badgeCount={unreadCount}
           />
           <TabButton 
             active={activeTab === 'profile'} 
@@ -750,20 +764,42 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                 <div className="divide-y divide-gray-50">
                   {notificaciones.length > 0 ? notificaciones.map((n) => (
                     <div key={n.id} className={`p-6 flex gap-4 hover:bg-gray-50 transition-colors ${!n.leida ? 'bg-red-50/30' : ''}`}>
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                        n.tipo === 'success' ? 'bg-green-100 text-green-600' : 
-                        n.tipo === 'warning' ? 'bg-orange-100 text-orange-600' : 
-                        n.tipo === 'error' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
+                        n.tipo === 'verificacion' ? 'bg-green-100 text-green-600 border border-green-200' : 
+                        n.tipo === 'mensaje_admin' ? 'bg-red-600 text-white border-2 border-red-100 animate-pulse' :
+                        'bg-blue-100 text-blue-600 border border-blue-200'
                       }`}>
-                         <Bell className="w-5 h-5" />
+                         {n.tipo === 'mensaje_admin' ? <Send className="w-5 h-5" /> : <Bell className="w-5 h-5" />}
                       </div>
                       <div className="flex-1">
-                        <p className="text-gray-900 font-medium leading-relaxed">{n.mensaje}</p>
-                        <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-wider uppercase">
-                          {new Date(n.creado_en).toLocaleString()}
-                        </p>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
+                            n.tipo === 'verificacion' ? 'bg-green-100 text-green-700' : 
+                            n.tipo === 'mensaje_admin' ? 'bg-red-100 text-red-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {n.tipo === 'verificacion' ? 'Seguridad' : n.tipo === 'mensaje_admin' ? 'Comunicado Oficial' : 'Aviso'}
+                          </span>
+                          <span className="text-[10px] text-gray-400 font-bold">{new Date(n.creado_en).toLocaleString()}</span>
+                        </div>
+                        
+                        {n.tipo === 'mensaje_admin' ? (
+                          (() => {
+                            try {
+                              const msg = JSON.parse(n.mensaje);
+                              return (
+                                <div className="space-y-1">
+                                  <p className="font-bold text-gray-900 text-sm">{msg.title}</p>
+                                  <p className="text-gray-600 text-xs leading-relaxed">{msg.content}</p>
+                                </div>
+                              );
+                            } catch(e) { return <p className="text-sm text-gray-900">{n.mensaje}</p>; }
+                          })()
+                        ) : (
+                          <p className="text-sm text-gray-900 font-medium leading-relaxed">{n.mensaje}</p>
+                        )}
                       </div>
-                      {!n.leida && <div className="w-2 h-2 rounded-full bg-red-600 self-center"></div>}
+                      {!n.leida && <div className="w-2 h-2 rounded-full bg-red-600 self-center shadow-[0_0_8px_rgba(220,38,38,0.5)]"></div>}
                     </div>
                   )) : (
                     <div className="p-16 text-center">
@@ -1064,20 +1100,6 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                       />
                     </div>
                     <p className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-wider">Esencial para recibir alertas de noticias de último momento.</p>
-                    <button 
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          await fetch('/api/admin/sync-perfil', { method: 'POST' });
-                          alert('Datos sincronizados con SendPulse con éxito');
-                        } catch (e) {
-                          alert('Error al sincronizar: ' + (e as Error).message);
-                        }
-                      }}
-                      className="mt-2 text-[10px] bg-gray-100 px-3 py-1 rounded text-gray-600 hover:bg-gray-200 uppercase font-black tracking-widest transition-all"
-                    >
-                      Sincronizar con SendPulse ahora
-                    </button>
                   </div>
 
                   <div>
@@ -1306,7 +1328,62 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
             )}
 
             {activeTab === 'admin' && user.rol === 'admin' && (
-          <div className="space-y-8">
+          <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Centro de Mensajería */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+               <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+                 <h3 className="text-xl font-black flex items-center gap-2">
+                   <Send className="w-5 h-5 text-red-600" /> Centro de Mensajería Global
+                 </h3>
+               </div>
+               <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Destinatarios</label>
+                      <select id="msg-target" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-red-500">
+                        <option value="todos">Toda la comunidad (Global)</option>
+                        <option value="autores">Solo Autores y Administradores</option>
+                        <option value="suscriptores">Solo Suscriptores</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Asunto / Título</label>
+                      <input id="msg-title" type="text" placeholder="Ej: Nueva funcionalidad disponible" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-red-500" />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Mensaje</label>
+                      <textarea id="msg-content" rows={3} placeholder="Escribe el contenido del mensaje..." className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-red-500"></textarea>
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        const target = (document.getElementById('msg-target') as unknown as HTMLSelectElement)?.value;
+                        const title = (document.getElementById('msg-title') as unknown as HTMLInputElement)?.value;
+                        const content = (document.getElementById('msg-content') as unknown as HTMLTextAreaElement)?.value;
+                        if(!title || !content) return alert('Completa título y contenido');
+                        
+                        try {
+                          const res = await fetch('/api/admin/enviar-mensaje', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ target, title, content })
+                          });
+                          const data = await res.json() as any;
+                          if(data.error) throw new Error(data.error);
+                          alert('Mensaje enviado a ' + data.count + ' usuarios');
+                          (document.getElementById('msg-title') as HTMLInputElement).value = '';
+                          (document.getElementById('msg-content') as HTMLTextAreaElement).value = '';
+                        } catch(e: any) { alert('Error: ' + e.message); }
+                      }}
+                      className="w-full bg-red-600 text-white font-black py-4 rounded-xl hover:bg-red-700 transition-all shadow-lg flex items-center justify-center gap-2"
+                    >
+                      <Send className="w-4 h-4" /> Difundir Mensaje
+                    </button>
+                  </div>
+               </div>
+            </div>
+
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-gray-100">
                 <h3 className="text-xl font-bold flex items-center gap-2">
@@ -1681,13 +1758,22 @@ function getTipOfDay() {
   return tips[dayOfYear % tips.length];
 }
 
-function TabButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
+function TabButton({ active, onClick, icon, label, badgeCount }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, badgeCount?: number }) {
   return (
     <button 
       onClick={onClick}
-      className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${active ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+      className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm transition-all whitespace-nowrap relative ${active ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
     >
-      {icon} {label}
+      {icon} 
+      <span>{label}</span>
+      {badgeCount !== undefined && badgeCount > 0 && (
+        <div className="absolute -top-1 -right-1 flex h-4 w-4">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 border-2 border-white text-[8px] items-center justify-center text-white">
+            {badgeCount > 9 ? '9+' : badgeCount}
+          </span>
+        </div>
+      )}
     </button>
   );
 }

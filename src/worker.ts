@@ -996,6 +996,40 @@ app.get('/api/setup-db', async (c) => {
   }
 });
 
+// Admin: Send global or group messages
+app.post('/api/admin/enviar-mensaje', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256') as any;
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    const { target, title, content } = await c.req.json();
+    
+    let userQuery = 'SELECT id FROM usuarios';
+    if (target === 'autores') userQuery += " WHERE rol = 'autor' OR rol = 'admin'";
+    else if (target === 'suscriptores') userQuery += " WHERE rol = 'suscriptor'";
+
+    const users: any = await c.env.DB.prepare(userQuery).all();
+    const notificationId = crypto.randomUUID();
+    
+    const statements = (users.results || []).map((u: any) => {
+      return c.env.DB.prepare(
+        'INSERT INTO notificaciones (usuario_id, mensaje, tipo, leida) VALUES (?, ?, ?, 0)'
+      ).bind(u.id, JSON.stringify({ title, content }), 'mensaje_admin');
+    });
+
+    if (statements.length > 0) {
+      await c.env.DB.batch(statements);
+    }
+
+    return c.json({ success: true, count: statements.length });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 // Admin: Sync current user profile to SendPulse manually
 app.post('/api/admin/sync-perfil', async (c) => {
   const token = getCookie(c, 'token');
