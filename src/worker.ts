@@ -1015,6 +1015,13 @@ app.get('/api/rss/semanal', async (c) => {
     console.log(`RSS Request: UA=${ua}, IP=${ip}`);
     
     try {
+      await c.env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS webhook_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          payload TEXT,
+          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
       await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
         .bind(`RSS_FETCH: UA=${ua}, IP=${ip}`).run();
     } catch(e) {}
@@ -1078,7 +1085,7 @@ app.get('/api/rss/semanal', async (c) => {
 
     return new Response(rss, {
       headers: {
-        'Content-Type': 'application/xml; charset=UTF-8',
+        'Content-Type': 'application/rss+xml; charset=UTF-8',
         'Cache-Control': 'public, max-age=3600',
         'Access-Control-Allow-Origin': '*'
       }
@@ -1752,10 +1759,21 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
 
     const spData = await spResponse.text();
     
-    // Log to DB
-    await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
-      .bind(`[SENDPULSE EVENT TRIGGER] Status: ${spResponse.status} - Response: ${spData}`)
-      .run();
+    // Log to DB (Safe)
+    try {
+      await c.env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS webhook_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          payload TEXT,
+          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+      await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
+        .bind(`[SENDPULSE EVENT TRIGGER] Status: ${spResponse.status} - Response: ${spData}`)
+        .run();
+    } catch (e) {
+      console.error('Logging error:', e);
+    }
 
     if (!spResponse.ok) {
       return c.json({ error: 'Error enviando evento a SendPulse', details: spData }, 500);
