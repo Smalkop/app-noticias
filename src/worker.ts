@@ -214,10 +214,39 @@ async function addToSendPulse(c: any, email: string, nombre: string, phone?: str
 
     const result = await spRes.json() as any;
     
+    // IF PHONE EXISTS: Update phone specifically using the PUT endpoint
+    if (phone && spRes.ok) {
+      try {
+        const phoneClean = phone.replace(/\s+/g, '').replace('+', ''); // SendPulse usually likes clean digits
+        const phoneRes = await fetch(`https://api.sendpulse.com/addressbooks/${spListId}/phone`, {
+          method: 'PUT',
+          headers: { 
+            'Authorization': `Bearer ${access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            id: parseInt(spListId),
+            email: email,
+            phone: phoneClean
+          })
+        });
+        const phoneResult = await phoneRes.json() as any;
+        console.log('SendPulse Phone API Result:', phoneResult);
+        
+        // Log phone sync result
+        try {
+          await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
+            .bind(`SendPulse Phone PUT [${email}] Result: ` + JSON.stringify(phoneResult)).run();
+        } catch(e) {}
+      } catch (phoneErr: any) {
+        console.error('SendPulse Phone Sync Error:', phoneErr);
+      }
+    }
+    
     // Log to D1 for debugging
     try {
       const dbStatus = spRes.ok ? "SUCCESS" : "ERROR";
-      const logMsg = `SendPulse ${dbStatus} [${email}] (Phone: ${phone}) Result: ${JSON.stringify(result)}`;
+      const logMsg = `SendPulse Main POST [${email}] (Phone: ${phone}) Result: ${JSON.stringify(result)}`;
       await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
         .bind(logMsg).run();
     } catch(e) {}
