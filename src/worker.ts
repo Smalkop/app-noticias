@@ -1649,6 +1649,131 @@ app.get('/api/admin/test-sendpulse', async (c) => {
   }
 });
 
+// Admin: Trigger SendPulse Weekly Event
+app.post('/api/admin/trigger-sendpulse', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256') as any;
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+    // 1. Get Top 10 News (Last 7 Days)
+    const dateLimit = "datetime('now', '-7 days')";
+    let { results: news } = await c.env.DB.prepare(`
+      SELECT n.id, n.titulo, n.subtitulo, n.contenido, n.imagen_destacada, n.vistas, n.publicado_en, 
+             u.nombre as autor_nombre, c.nombre as categoria_nombre
+      FROM noticias n
+      JOIN usuarios u ON n.autor_id = u.id
+      JOIN categorias c ON n.categoria_id = c.id
+      WHERE n.estado = 'publicado' AND n.publicado_en >= ${dateLimit}
+      ORDER BY n.vistas DESC
+      LIMIT 10
+    `).all();
+
+    // Fallback if empty in last 7 days
+    if (!news || news.length === 0) {
+      const fallback = await c.env.DB.prepare(`
+        SELECT n.id, n.titulo, n.subtitulo, n.contenido, n.imagen_destacada, n.vistas, n.publicado_en, 
+               u.nombre as autor_nombre, c.nombre as categoria_nombre
+        FROM noticias n
+        JOIN usuarios u ON n.autor_id = u.id
+        JOIN categorias c ON n.categoria_id = c.id
+        WHERE n.estado = 'publicado'
+        ORDER BY n.vistas DESC
+        LIMIT 10
+      `).all();
+      news = fallback.results;
+    }
+
+    const spId = c.env['id sendpulse'];
+    const spSecret = c.env['secret sendpulse'];
+    if (!spId || !spSecret) {
+      return c.json({ error: 'Credenciales de SendPulse no configuradas' }, 400);
+    }
+
+    // Attempt auth
+    const authRes = await fetch('https://api.sendpulse.com/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grant_type: 'client_credentials', client_id: spId, client_secret: spSecret })
+    });
+
+    if (!authRes.ok) {
+      const text = await authRes.text();
+      return c.json({ error: 'Error de autenticación SendPulse', details: text }, 500);
+    }
+
+    const { access_token } = await authRes.json() as any;
+
+    // 2. Prepare Payload (Rediseñado según ejemplo de usuario)
+    const spEventUrl = "https://events.sendpulse.com/events/name/nuevo_evento_2026_05_18";
+    const url = new URL(c.req.url);
+    const baseUrl = `${url.protocol}//${url.host}`;
+    
+    // El usuario quiere el formato JSON basado en su ejemplo aplicado a noticias
+    const eventPayload = {
+      email: payload.email, // Contacto que dispara el evento (Admin)
+      event_id: `weekly_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      event_type: "weekly_popular_news",
+      user: {
+        user_id: payload.id,
+        email: payload.email,
+        name: payload.nombre
+      },
+      order: {
+        order_id: `digest_${new Date().toISOString().split('T')[0]}`,
+        items: (news || []).map((item: any) => ({
+          item_id: item.id,
+          name: item.titulo,
+          quantity: item.vistas || 0,
+          price: 0,
+          link: `${baseUrl}/noticia/${item.id}`,
+          description: item.subtitulo || (item.contenido.replace(/<[^>]*>?/gm, '').substring(0, 150) + '...')
+        }))
+      },
+      metadata: {
+        total_items: (news || []).length,
+        source: "Lapacho Post Automated Task"
+      }
+    };
+
+    // 3. Send to SendPulse
+    const spResponse = await fetch(spEventUrl, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${access_token}`
+      },
+      body: JSON.stringify(eventPayload)
+    });
+
+    const spData = await spResponse.text();
+    
+    // Log to DB
+    await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
+      .bind(`[SENDPULSE EVENT TRIGGER] Status: ${spResponse.status} - Response: ${spData}`)
+      .run();
+
+    if (!spResponse.ok) {
+      return c.json({ error: 'Error enviando evento a SendPulse', details: spData }, 500);
+    }
+
+    return c.json({ 
+      success: true, 
+      message: 'Evento de noticias destacadas enviado correctamente a SendPulse', 
+      count: news.length,
+      sendpulse_response: spData
+    });
+
+  } catch (err: any) {
+    console.error('Trigger Event Error:', err);
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 // Auth: Google Login
 app.post('/api/auth/google', async (c) => {
   try {

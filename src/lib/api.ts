@@ -160,6 +160,7 @@ export const api = {
         body: JSON.stringify({ estado })
       }) as any,
     migrarDB: (): Promise<any> => fetchWithAuth('/api/admin/migrar-db') as any,
+    triggerSendPulse: (): Promise<any> => fetchWithAuth('/api/admin/trigger-sendpulse', { method: 'POST' }) as any,
   },
   
   seguidores: {

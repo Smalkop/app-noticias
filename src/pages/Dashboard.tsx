@@ -68,7 +68,6 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   const [patrocinioMonto, setPatrocinioMonto] = useState('');
   const [patrocinioMarca, setPatrocinioMarca] = useState('');
   const [patrocinioRUC, setPatrocinioRUC] = useState('');
-  const [showBankDetails, setShowBankDetails] = useState(false);
   const [adminPatrocinios, setAdminPatrocinios] = useState<any[]>([]);
 
   const [uploading, setUploading] = useState(false);
@@ -209,51 +208,30 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
         setSuccess('¡Noticia actualizada correctamente!');
       } else {
         await api.noticias.create(data);
-        if (patrocinada) {
-          setShowBankDetails(true);
-        } else {
-          setSuccess('¡Noticia publicada con éxito!');
-        }
+        setSuccess('¡Noticia publicada con éxito!');
       }
 
-      if (!patrocinada || editingId) {
-        // Reset form
-        setEditingId(null);
-        setTitulo('');
-        setSubtitulo('');
-        setContenido('');
-        setImagenUrl('');
-        setCategoriaId('');
-        setPatrocinada(false);
-        setPatrocinioMonto('');
-        setPatrocinioMarca('');
-        setPatrocinioRUC('');
-        
-        setTimeout(() => {
-          setSuccess('');
-          setActiveTab('manage');
-        }, 2000);
-      }
+      // Reset form
+      setEditingId(null);
+      setTitulo('');
+      setSubtitulo('');
+      setContenido('');
+      setImagenUrl('');
+      setCategoriaId('');
+      setPatrocinada(false);
+      setPatrocinioMonto('');
+      setPatrocinioMarca('');
+      setPatrocinioRUC('');
+      
+      setTimeout(() => {
+        setSuccess('');
+        setActiveTab('manage');
+      }, 2000);
     } catch (error) {
       alert('Error al guardar noticia');
     }
   };
 
-  const handleCloseBankDetails = () => {
-    setShowBankDetails(false);
-    // Final reset
-    setEditingId(null);
-    setTitulo('');
-    setSubtitulo('');
-    setContenido('');
-    setImagenUrl('');
-    setCategoriaId('');
-    setPatrocinada(false);
-    setPatrocinioMonto('');
-    setPatrocinioMarca('');
-    setPatrocinioRUC('');
-    setActiveTab('manage');
-  };
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1560,6 +1538,21 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
                   <button 
                     onClick={async () => {
+                      if(!window.confirm('¿Desea disparar el evento de Noticias Destacadas a SendPulse ahora? Esto enviará el top 10 semanal.')) return;
+                      try {
+                        const res = await api.admin.triggerSendPulse();
+                        alert(res.message || 'Evento disparado con éxito');
+                      } catch (e: any) { 
+                        alert('Error: ' + e.message); 
+                      }
+                    }}
+                    className="bg-purple-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-purple-700 transition-all flex items-center gap-2"
+                  >
+                    <Send className="w-5 h-5" /> Disparar Evento Semanal (SendPulse)
+                  </button>
+
+                  <button 
+                    onClick={async () => {
                       try {
                         const res = await fetch('/api/admin/migrar-db');
                         const data: any = await res.json();
@@ -1687,62 +1680,6 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
           </div>
         )}
           </motion.div>
-        )}
-      </AnimatePresence>
-      
-      <AnimatePresence>
-        {showBankDetails && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6"
-            >
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto">
-                <CheckCircle className="w-8 h-8" />
-              </div>
-              <div className="text-center">
-                <h3 className="text-2xl font-serif font-bold text-gray-900 mb-2">¡Solicitud de Patrocinio Guardada!</h3>
-                <p className="text-gray-500">Para activar la publicidad, por favor realiza la transferencia bancaria:</p>
-              </div>
-              
-              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 space-y-4">
-                <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nombre</p>
-                  <p className="font-bold text-gray-900 leading-tight">Brahian Ramon Gonzalez Rojas</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">RUC</p>
-                  <p className="font-bold text-gray-900 leading-tight">6711627-2</p>
-                </div>
-                <div className="flex gap-8">
-                  <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Cuenta</p>
-                    <p className="font-bold text-gray-900 leading-tight">6192432789</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Entidad</p>
-                    <p className="font-bold text-gray-900 leading-tight text-red-600">Ueno Bank</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-red-50 p-4 rounded-xl flex gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
-                <p className="text-sm text-red-800">
-                  Envía el comprobante de transferencia en el area de <strong>Notificaciones</strong> para su validación.
-                </p>
-              </div>
-              
-              <button 
-                onClick={handleCloseBankDetails}
-                className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-black transition-all shadow-lg"
-              >
-                Entendido, ir a mis noticias
-              </button>
-            </motion.div>
-          </div>
         )}
       </AnimatePresence>
     </div>
