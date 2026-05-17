@@ -1005,6 +1005,15 @@ app.get('/api/setup-db', async (c) => {
 
 // RSS: Resumen semanal
 app.get('/api/rss/semanal', async (c) => {
+  // Log request for debugging to see if SendPulse is reaching the Edge
+  try {
+    const ua = c.req.header('User-Agent') || 'unknown';
+    const ip = c.req.header('cf-connecting-ip') || 'unknown';
+    console.log(`RSS Request: UA=${ua}, IP=${ip}`);
+    await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
+      .bind(`RSS_FETCH: UA=${ua}, IP=${ip}`).run();
+  } catch(e) {}
+
   try {
     const TOP_LIMIT = 10;
     const dateLimit = "datetime('now', '-7 days')";
@@ -1018,28 +1027,28 @@ app.get('/api/rss/semanal', async (c) => {
       LIMIT ?
     `).bind(TOP_LIMIT).all();
 
-    const baseUrl = "https://noticias.brahian.dev";
+    // Use current request host to avoid hardcoding domain if testing on different URLs
+    const url = new URL(c.req.url);
+    const baseUrl = `${url.protocol}//${url.host}`;
     
     let rss = `<?xml version="1.0" encoding="UTF-8" ?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<rss version="2.0">
 <channel>
   <title>Lapacho Post | Resumen semanal</title>
   <link>${baseUrl}</link>
   <description>Las 10 noticias más importantes de la semana</description>
   <language>es-PY</language>
   <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
-  <atom:link href="${baseUrl}/api/rss/semanal" rel="self" type="application/rss+xml" />
 `;
 
     (news || []).forEach((n: any) => {
       // Basic summary from content (strip HTML and truncate)
-      const plainText = n.contenido.replace(/<[^>]*>?/gm, '').substring(0, 200).trim() + '...';
-      const cleanTitle = n.titulo.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const cleanDesc = plainText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const plainText = n.contenido.replace(/<[^>]*>?/gm, '').substring(0, 400).trim() + '...';
       
+      // Use CDATA for content to safely handle special characters
       rss += `  <item>
-    <title>${cleanTitle}</title>
-    <description>${cleanDesc}</description>
+    <title><![CDATA[${n.titulo}]]></title>
+    <description><![CDATA[${plainText}]]></description>
     <link>${baseUrl}/noticia/${n.id}</link>
     <guid isPermaLink="false">${n.id}</guid>
     <pubDate>${new Date(n.creado_en).toUTCString()}</pubDate>
@@ -1050,14 +1059,14 @@ app.get('/api/rss/semanal', async (c) => {
     rss += `</channel>
 </rss>`;
 
-    return new Response(rss, {
-      headers: {
-        'Content-Type': 'application/rss+xml; charset=UTF-8',
-        'Cache-Control': 'public, max-age=3600' // Cache for 1 hour
-      }
+    return c.body(rss, 200, {
+      'Content-Type': 'application/rss+xml; charset=UTF-8',
+      'Cache-Control': 'public, max-age=60', // Reduce cache for testing
+      'Access-Control-Allow-Origin': '*'
     });
 
   } catch (error: any) {
+    console.error('RSS Error:', error);
     return c.text('Error generating RSS: ' + error.message, 500);
   }
 });
