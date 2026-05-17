@@ -39,7 +39,7 @@ app.use('*', async (c, next) => {
     "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://api.sendpulse.com",
     "frame-src 'self' https://accounts.google.com",
     "img-src 'self' data: https: *",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
     "font-src 'self' https://fonts.gstatic.com"
   ].join('; ');
   c.header('Content-Security-Policy', csp);
@@ -591,8 +591,8 @@ app.post('/api/noticias/:id/track', async (c) => {
     }
 
     await c.env.DB.prepare(`
-      INSERT INTO metricas_visitas (noticia_id, usuario_id, visitor_id, ip, fuente, dispositivo, duracion, scroll)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO metricas_visitas (noticia_id, usuario_id, visitor_id, ip, fuente, dispositivo, duracion, scroll, fecha)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).bind(noticiaId, usuario_id, visitor_id, ip, fuente, dispositivo, duracion || 0, scroll || 0).run();
 
     return c.json({ success: true });
@@ -1000,6 +1000,65 @@ app.get('/api/setup-db', async (c) => {
     return c.json({ message: 'Base de datos inicializada correctamente' });
   } catch (error: any) {
     return c.json({ error: 'Error al inicializar la base de datos', details: error.message }, 500);
+  }
+});
+
+// RSS: Resumen semanal
+app.get('/api/rss/semanal', async (c) => {
+  try {
+    const TOP_LIMIT = 10;
+    const dateLimit = "datetime('now', '-7 days')";
+    
+    // Fetch top 10 news of the week
+    const { results: news } = await c.env.DB.prepare(`
+      SELECT id, titulo, contenido, creado_en, vistas
+      FROM noticias
+      WHERE creado_en >= ${dateLimit} AND estado = 'publicado'
+      ORDER BY vistas DESC
+      LIMIT ?
+    `).bind(TOP_LIMIT).all();
+
+    const baseUrl = "https://noticias.brahian.dev";
+    
+    let rss = `<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <title>Lapacho Post | Resumen semanal</title>
+  <link>${baseUrl}</link>
+  <description>Las 10 noticias más importantes de la semana</description>
+  <language>es-PY</language>
+  <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+  <atom:link href="${baseUrl}/api/rss/semanal" rel="self" type="application/rss+xml" />
+`;
+
+    (news || []).forEach((n: any) => {
+      // Basic summary from content (strip HTML and truncate)
+      const plainText = n.contenido.replace(/<[^>]*>?/gm, '').substring(0, 200).trim() + '...';
+      const cleanTitle = n.titulo.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const cleanDesc = plainText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      
+      rss += `  <item>
+    <title>${cleanTitle}</title>
+    <description>${cleanDesc}</description>
+    <link>${baseUrl}/noticia/${n.id}</link>
+    <guid isPermaLink="false">${n.id}</guid>
+    <pubDate>${new Date(n.creado_en).toUTCString()}</pubDate>
+  </item>
+`;
+    });
+
+    rss += `</channel>
+</rss>`;
+
+    return new Response(rss, {
+      headers: {
+        'Content-Type': 'application/rss+xml; charset=UTF-8',
+        'Cache-Control': 'public, max-age=3600' // Cache for 1 hour
+      }
+    });
+
+  } catch (error: any) {
+    return c.text('Error generating RSS: ' + error.message, 500);
   }
 });
 

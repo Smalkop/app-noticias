@@ -10,7 +10,7 @@ import {
   Settings, User as UserIcon, Trash2, Edit, CheckCircle, XCircle,
   Clock, AlertCircle, Bell, Users, Calendar, ArrowUpRight, 
   Smartphone, Monitor, Globe, Activity, ChevronLeft, ChevronRight,
-  Eye, Share2, Database, ShieldAlert, RefreshCw
+  Eye, Share2, Database, ShieldAlert, RefreshCw, Rss
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { compressImage } from '../lib/imageUtils';
@@ -532,7 +532,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                            <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-8 flex items-center gap-2">
                              <Globe className="w-4 h-4"/> Fuentes de Tráfico
                            </h3>
-                           <div className="h-64">
+                           <div className="h-[300px] w-full min-h-[300px]">
                              <ResponsiveContainer width="100%" height="100%">
                                <PieChart>
                                  <Pie
@@ -560,7 +560,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                            <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-8 flex items-center gap-2">
                              <Smartphone className="w-4 h-4"/> Segmentación Dispositivo
                            </h3>
-                           <div className="h-64">
+                           <div className="h-[300px] w-full min-h-[300px]">
                              <ResponsiveContainer width="100%" height="100%">
                                <BarChart data={[
                                  { name: 'Móvil', value: selectedMetrica.dispositivos?.mobile || 0 },
@@ -1458,6 +1458,16 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                   >
                     <RefreshCw className="w-5 h-5" /> Sincronizar con SendPulse
                   </button>
+
+                  <a 
+                    href="/api/rss/semanal"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition-all flex items-center gap-2"
+                  >
+                    <Rss className="w-5 h-5" /> RSS Semanal (SendPulse)
+                  </a>
+
 
                   <button 
                     onClick={async () => {
