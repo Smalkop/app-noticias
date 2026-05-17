@@ -1459,14 +1459,25 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                     <RefreshCw className="w-5 h-5" /> Sincronizar con SendPulse
                   </button>
 
-                  <a 
-                    href="/api/rss/semanal"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition-all flex items-center gap-2"
-                  >
-                    <Rss className="w-5 h-5" /> RSS Semanal (SendPulse)
-                  </a>
+                  <div className="flex flex-wrap gap-4">
+                    <a 
+                      href="/api/rss/semanal"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition-all flex items-center gap-2"
+                    >
+                      <Rss className="w-5 h-5" /> RSS Semanal
+                    </a>
+
+                    <a 
+                      href="/api/json-feed/semanal"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="bg-gray-800 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-900 transition-all flex items-center gap-2"
+                    >
+                      <Database className="w-5 h-5" /> JSON Popular
+                    </a>
+                  </div>
 
 
                   <button 

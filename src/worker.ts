@@ -1003,9 +1003,12 @@ app.get('/api/setup-db', async (c) => {
   }
 });
 
-// RSS: Resumen semanal
+// RSS: Resumen semanal (10 más vistas de los últimos 7 días)
 app.get('/api/rss/semanal', async (c) => {
   try {
+    const TOP_LIMIT = 10;
+    const dateLimit = "datetime('now', '-7 days')";
+    
     // Log request for debugging
     const ua = c.req.header('User-Agent') || 'unknown';
     const ip = c.req.header('cf-connecting-ip') || 'unknown';
@@ -1016,95 +1019,132 @@ app.get('/api/rss/semanal', async (c) => {
         .bind(`RSS_FETCH: UA=${ua}, IP=${ip}`).run();
     } catch(e) {}
 
-    const TOP_LIMIT = 10;
-    
-    // Fetch last 10 published news (more robust than strictly last 7 days if news are sparse)
+    // Fetch top 10 most viewed news of the last 7 days
     const { results: news } = await c.env.DB.prepare(`
       SELECT id, titulo, contenido, creado_en, vistas, imagen_destacada
       FROM noticias
-      WHERE estado = 'publicado'
-      ORDER BY creado_en DESC
+      WHERE estado = 'publicado' AND creado_en >= ${dateLimit}
+      ORDER BY vistas DESC
       LIMIT ?
     `).bind(TOP_LIMIT).all();
+
+    // Fallback: If no news in last 7 days, get overall most viewed to keep the feed alive
+    let finalNews = news || [];
+    if (finalNews.length === 0) {
+      const fallback = await c.env.DB.prepare(`
+        SELECT id, titulo, contenido, creado_en, vistas, imagen_destacada
+        FROM noticias
+        WHERE estado = 'publicado'
+        ORDER BY vistas DESC
+        LIMIT ?
+      `).bind(TOP_LIMIT).all();
+      finalNews = fallback.results || [];
+    }
 
     const url = new URL(c.req.url);
     const baseUrl = `${url.protocol}//${url.host}`;
     
+    // Use a very standard RSS 2.0 structure for max compatibility
     let rss = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
-<channel>
-  <title>Lapacho Post | Resumen semanal</title>
-  <link>${baseUrl}</link>
-  <description>Las 10 noticias más importantes de la semana</description>
-  <language>es-PY</language>
-  <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
-  <atom:link href="${baseUrl}/api/rss/semanal" rel="self" type="application/rss+xml" />
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Lapacho Post | Resumen Semanal</title>
+    <link>${baseUrl}</link>
+    <description>Las 10 noticias más vistas de la semana en Lapacho Post.</description>
+    <language>es-PY</language>
+    <pubDate>${new Date().toUTCString()}</pubDate>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <atom:link href="${baseUrl}/api/rss/semanal" rel="self" type="application/rss+xml" />
 `;
 
-    (news || []).forEach((n: any) => {
-      const plainText = n.contenido.replace(/<[^>]*>?/gm, '').substring(0, 500).trim() + '...';
+    finalNews.forEach((n: any) => {
+      const plainText = n.contenido.replace(/<[^>]*>?/gm, '').substring(0, 400).trim() + '...';
       const newsUrl = `${baseUrl}/noticia/${n.id}`;
       
-      rss += `  <item>
-    <title><![CDATA[${n.titulo}]]></title>
-    <link>${newsUrl}</link>
-    <description><![CDATA[${plainText}]]></description>
-    <guid isPermaLink="false">${n.id}</guid>
-    <pubDate>${new Date(n.creado_en).toUTCString()}</pubDate>
-    ${n.imagen_destacada ? `<enclosure url="${n.imagen_destacada}" length="0" type="image/jpeg" />` : ''}
-    <content:encoded><![CDATA[${n.contenido}]]></content:encoded>
-  </item>
+      rss += `    <item>
+      <title><![CDATA[${n.titulo}]]></title>
+      <link>${newsUrl}</link>
+      <guid isPermaLink="false">${n.id}</guid>
+      <pubDate>${new Date(n.creado_en).toUTCString()}</pubDate>
+      <description><![CDATA[${plainText}]]></description>
+      ${n.imagen_destacada ? `<media:content url="${n.imagen_destacada}" medium="image" />` : ''}
+      <content:encoded><![CDATA[${n.contenido}]]></content:encoded>
+    </item>
 `;
     });
 
-    rss += `</channel>
+    rss += `  </channel>
 </rss>`;
 
     return new Response(rss, {
       headers: {
         'Content-Type': 'application/xml; charset=UTF-8',
-        'Cache-Control': 'public, max-age=300',
+        'Cache-Control': 'public, max-age=3600',
         'Access-Control-Allow-Origin': '*'
       }
     });
 
   } catch (error: any) {
     console.error('RSS Error:', error);
-    return c.text('Error generating RSS: ' + error.message, 500);
+    return c.text('Error generating RSS', 500);
   }
 });
 
-// Webhook: Payment Event Handler (Example provided by user)
-app.post('/api/webhook/payment', async (c) => {
+// JSON Feed: Resumen de impacto (Diseño basado en el ejemplo del usuario aplicado a noticias)
+app.get('/api/json-feed/semanal', async (c) => {
   try {
-    const payload = await c.req.json();
-    console.log('Payment Webhook Received:', JSON.stringify(payload));
-    
-    // Log to DB
-    await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
-      .bind(`PAYMENT_EVENT: ${JSON.stringify(payload)}`).run();
-      
-    // Example logic: if it's a success, maybe notify the user in-app
-    if (payload.payment && payload.payment.status === 'successful' && payload.user && payload.user.email) {
-      const user: any = await c.env.DB.prepare('SELECT id FROM usuarios WHERE email = ?')
-        .bind(payload.user.email).first();
-        
-      if (user) {
-        await c.env.DB.prepare(`
-          INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, leida)
-          VALUES (?, '¡Pago Confirmado!', 'Hemos recibido tu pago de ${payload.payment.amount} ${payload.payment.currency}. ¡Gracias por tu apoyo!', 'sistema', 0)
-        `).bind(user.id).run();
-      }
-    }
+    const dateLimit = "datetime('now', '-7 days')";
+    const { results: news } = await c.env.DB.prepare(`
+      SELECT n.*, u.nombre as autor_nombre 
+      FROM noticias n 
+      JOIN usuarios u ON n.autor_id = u.id
+      WHERE n.estado = 'publicado' AND n.creado_en >= ${dateLimit}
+      ORDER BY n.vistas DESC LIMIT 10
+    `).all();
 
-    return c.json({ success: true, message: 'Event logged and processed' });
+    const url = new URL(c.req.url);
+    const baseUrl = `${url.protocol}//${url.host}`;
+
+    const payload = {
+      event_id: `digest_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      event_type: "weekly_popular_content",
+      summary: {
+        total_items: (news || []).length,
+        period: "last_7_days_by_views"
+      },
+      noticias: (news || []).map((n: any) => ({
+        id: n.id,
+        titulo: n.titulo,
+        autor: {
+          nombre: n.autor_nombre,
+          id: n.autor_id
+        },
+        estadisticas: {
+          vistas: n.vistas || 0
+        },
+        enlaces: {
+          publico: `${baseUrl}/noticia/${n.id}`,
+          miniatura: n.imagen_destacada
+        },
+        publicado_el: n.creado_en
+      })),
+      metadata: {
+        server: "Lapacho_Edge_Worker",
+        request_ip: c.req.header('cf-connecting-ip')
+      }
+    };
+
+    return c.json(payload, 200, {
+      'Cache-Control': 'public, max-age=3600',
+      'Access-Control-Allow-Origin': '*'
+    });
   } catch (err: any) {
-    console.error('Payment Webhook Error:', err);
-    return c.json({ error: err.message }, 400);
+    return c.json({ error: err.message }, 500);
   }
 });
 
-// Admin: Send global or group messages
+// Admin: Send global or group messages (Original context preserved)
 app.post('/api/admin/enviar-mensaje', async (c) => {
   const token = getCookie(c, 'token');
   if (!token) return c.json({ error: 'No autorizado' }, 401);
