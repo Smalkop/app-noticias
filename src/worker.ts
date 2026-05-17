@@ -923,6 +923,7 @@ app.get('/api/setup-db', async (c) => {
         imagen_destacada TEXT,
         estado TEXT DEFAULT 'borrador',
         destacada INTEGER DEFAULT 0,
+        vistas INTEGER DEFAULT 0,
         publicado_en DATETIME,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1058,6 +1059,8 @@ app.get('/api/admin/migrar-db', async (c) => {
     const payload = await verify(token, secret, 'HS256');
     if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
 
+    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN vistas INTEGER DEFAULT 0`).catch(() => console.log('Columna vistas ya existe'));
+    
     await c.env.DB.exec(`
       ALTER TABLE noticias ADD COLUMN patrocinada INTEGER DEFAULT 0;
       ALTER TABLE noticias ADD COLUMN patrocinio_monto REAL;
@@ -1912,6 +1915,7 @@ app.get('/api/noticias', async (c) => {
 app.get('/api/noticias/:id', async (c) => {
   const id = c.req.param('id');
   const token = getCookie(c, 'token');
+  const vistoCookie = getCookie(c, `visto_${id}`);
   let currentUserId = null;
   
   if (token) {
@@ -1920,6 +1924,25 @@ app.get('/api/noticias/:id', async (c) => {
       const payload = await verify(token, secret, 'HS256');
       currentUserId = payload.id;
     } catch (e) {}
+  }
+
+  // 1. Algoritmo de Conteo de Vistas con Cookies
+  if (!vistoCookie) {
+    try {
+      // Incrementar vistas en D1
+      await c.env.DB.prepare('UPDATE noticias SET vistas = vistas + 1 WHERE id = ?').bind(id).run();
+      
+      // Inyectar cookie de 24h
+      setCookie(c, `visto_${id}`, '1', {
+        path: '/',
+        maxAge: 86400, // 24 horas
+        httpOnly: true,
+        secure: true,
+        sameSite: 'Lax'
+      });
+    } catch (err) {
+      console.error('Error al actualizar contador de vistas:', err);
+    }
   }
 
   try {
@@ -2039,7 +2062,8 @@ app.get('/api/metricas', async (c) => {
       const stats: any = await c.env.DB.prepare(`
         SELECT 
           n.titulo,
-          COUNT(m.id) as total_visitas,
+          n.vistas as vistas_totales_db,
+          COUNT(m.id) as total_visitas_registradas,
           COUNT(DISTINCT COALESCE(m.usuario_id, m.visitor_id, m.ip)) as vistas_unicas,
           SUM(CASE WHEN m.fuente = 'redes' THEN 1 ELSE 0 END) as fuentes_redes,
           SUM(CASE WHEN m.fuente = 'buscador' THEN 1 ELSE 0 END) as fuentes_buscador,
@@ -2061,7 +2085,7 @@ app.get('/api/metricas', async (c) => {
 
       return c.json([{
         titulo: stats.titulo,
-        total_visitas: stats.total_visitas || 0,
+        total_visitas: stats.vistas_totales_db || stats.total_visitas_registradas || 0,
         vistas_unicas: stats.vistas_unicas || 0,
         fuentes: { 
           directo: stats.fuentes_directo || 0, 
