@@ -183,8 +183,8 @@ export const api = {
   },
   
   metricas: {
-    get: (periodo: string = 'mes', noticiaId?: string): Promise<Metrica[]> => 
-      fetchWithAuth(`/api/metricas?periodo=${periodo}${noticiaId ? `&noticiaId=${noticiaId}` : ''}`) as any,
+    get: (periodo: string = 'mes', noticiaId?: string, global: boolean = false): Promise<any> => 
+      fetchWithAuth(`/api/metricas?periodo=${periodo}${noticiaId ? `&noticiaId=${noticiaId}` : ''}${global ? '&global=true' : ''}`) as any,
   },
   
   upload: (file: File): Promise<{ url: string }> => {

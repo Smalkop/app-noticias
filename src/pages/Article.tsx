@@ -36,15 +36,22 @@ export default function Article({ user }: ArticleProps) {
         const data = await api.noticias.get(id);
         setNoticia(data);
         
-        // Initial track
-        api.noticias.track(id, {
-          fuente: document.referrer.includes('facebook.com') || document.referrer.includes('t.co') || document.referrer.includes('whatsapp') ? 'redes' : 
-                  document.referrer.includes('google.com') ? 'buscador' : 'directo',
-          dispositivo: window.innerWidth < 768 ? 'mobile' : 'desktop',
-          duracion: 0,
-          scroll: 0,
-          visitor_id: getVisitorId()
-        });
+        // Initial track ONLY if not recently tracked in this session
+        const trackedKey = `tracked_${id}`;
+        const lastTrack = sessionStorage.getItem(trackedKey);
+        const now = Date.now();
+        
+        if (!lastTrack || (now - parseInt(lastTrack) > 1000 * 60 * 60)) { // Once per hour per session
+          api.noticias.track(id, {
+            fuente: document.referrer.includes('facebook.com') || document.referrer.includes('t.co') || document.referrer.includes('whatsapp') ? 'redes' : 
+                    document.referrer.includes('google.com') ? 'buscador' : 'directo',
+            dispositivo: window.innerWidth < 768 ? 'mobile' : 'desktop',
+            duracion: 0,
+            scroll: 0,
+            visitor_id: getVisitorId()
+          }).catch(() => {});
+          sessionStorage.setItem(trackedKey, now.toString());
+        }
 
         // Check following status only if logged in
         if (user) {

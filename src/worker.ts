@@ -575,25 +575,31 @@ app.get('/api/seguidores/mis-seguidores', async (c) => {
 // Track visit
 app.post('/api/noticias/:id/track', async (c) => {
   const noticiaId = c.req.param('id');
-  const { fuente, dispositivo, duracion, scroll, visitor_id } = await c.req.json();
-  const token = getCookie(c, 'token');
-  let usuario_id = null;
-  const ip = c.req.header('cf-connecting-ip') || 'unknown';
+  try {
+    const data = await c.req.json();
+    const { fuente, dispositivo, duracion, scroll, visitor_id } = data;
+    const token = getCookie(c, 'token');
+    let usuario_id = null;
+    const ip = c.req.header('cf-connecting-ip') || 'unknown';
 
-  if (token) {
-    try {
-      const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-      const payload = await verify(token, secret, 'HS256');
-      usuario_id = payload.id;
-    } catch (e) {}
+    if (token) {
+      try {
+        const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+        const payload = await verify(token, secret, 'HS256');
+        usuario_id = payload.id;
+      } catch (e) {}
+    }
+
+    await c.env.DB.prepare(`
+      INSERT INTO metricas_visitas (noticia_id, usuario_id, visitor_id, ip, fuente, dispositivo, duracion, scroll)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(noticiaId, usuario_id, visitor_id, ip, fuente, dispositivo, duracion || 0, scroll || 0).run();
+
+    return c.json({ success: true });
+  } catch (err: any) {
+    console.error('Error tracking visit:', err);
+    return c.json({ error: err.message }, 400);
   }
-
-  await c.env.DB.prepare(`
-    INSERT INTO metricas_visitas (noticia_id, usuario_id, visitor_id, ip, fuente, dispositivo, duracion, scroll)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(noticiaId, usuario_id, visitor_id, ip, fuente, dispositivo, duracion, scroll).run();
-
-  return c.json({ success: true });
 });
 
 // Reactions: Toggle
@@ -2023,15 +2029,40 @@ app.get('/api/metricas', async (c) => {
   if (!token) return c.json({ error: 'No autorizado' }, 401);
   const periodo = c.req.query('periodo') || 'mes';
   const noticiaId = c.req.query('noticiaId');
+  const global = c.req.query('global') === 'true';
 
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
     const payload = await verify(token, secret, 'HS256');
-    
-    let dateFilter = "datetime('now', '-30 days')";
-    if (periodo === 'dia') dateFilter = "datetime('now', '-1 day')";
-    if (periodo === 'semana') dateFilter = "datetime('now', '-7 days')";
-    if (periodo === 'año') dateFilter = "datetime('now', '-1 year')";
+
+    let dateFilter = "30 days";
+    if (periodo === 'dia') dateFilter = "1 day";
+    if (periodo === 'semana') dateFilter = "7 days";
+    if (periodo === 'año') dateFilter = "1 year";
+
+    const dateLimit = `datetime('now', '-${dateFilter}')`;
+
+    if (global) {
+      // Global stats for the user
+      let newsFilter = '';
+      const params = [];
+      if (payload.rol === 'autor') {
+        newsFilter = 'WHERE autor_id = ?';
+        params.push(payload.id);
+      }
+      
+      const stats: any = await c.env.DB.prepare(`
+        SELECT 
+          SUM(COALESCE(vistas, 0)) as total_vistas_db,
+          (SELECT COUNT(*) FROM metricas_visitas m JOIN noticias n2 ON m.noticia_id = n2.id ${newsFilter ? 'WHERE n2.autor_id = ?' : ''} AND m.fecha >= ${dateLimit}) as total_visitas_registradas
+        FROM noticias
+        ${newsFilter}
+      `).bind(...params, ...(newsFilter ? params : [])).first();
+      
+      return c.json({
+        total_impacto: Math.max(stats?.total_vistas_db || 0, stats?.total_visitas_registradas || 0)
+      });
+    }
 
     if (noticiaId) {
       // PRIVACY CHECK: Only author or admin can see detailed metrics
@@ -2043,9 +2074,10 @@ app.get('/api/metricas', async (c) => {
         const publicStats: any = await c.env.DB.prepare(`
           SELECT 
             n.titulo,
-            COUNT(m.id) as total_visitas
+            COALESCE(n.vistas, 0) as vistas_db,
+            COUNT(m.id) as total_visitas_registradas
           FROM noticias n
-          LEFT JOIN metricas_visitas m ON n.id = m.noticia_id AND m.fecha >= ${dateFilter}
+          LEFT JOIN metricas_visitas m ON n.id = m.noticia_id AND m.fecha >= ${dateLimit}
           WHERE n.id = ?
           GROUP BY n.id
         `).bind(noticiaId).first();
@@ -2054,7 +2086,7 @@ app.get('/api/metricas', async (c) => {
 
         return c.json([{
           titulo: publicStats.titulo,
-          total_visitas: publicStats.total_visitas || 0,
+          total_visitas: Math.max(publicStats.vistas_db, publicStats.total_visitas_registradas),
           public_only: true
         }]);
       }
@@ -2062,7 +2094,7 @@ app.get('/api/metricas', async (c) => {
       const stats: any = await c.env.DB.prepare(`
         SELECT 
           n.titulo,
-          n.vistas as vistas_totales_db,
+          COALESCE(n.vistas, 0) as vistas_totales_db,
           COUNT(m.id) as total_visitas_registradas,
           COUNT(DISTINCT COALESCE(m.usuario_id, m.visitor_id, m.ip)) as vistas_unicas,
           SUM(CASE WHEN m.fuente = 'redes' THEN 1 ELSE 0 END) as fuentes_redes,
@@ -2076,7 +2108,7 @@ app.get('/api/metricas', async (c) => {
           (SELECT COUNT(*) FROM reacciones WHERE noticia_id = n.id) as interacciones,
           (SELECT COUNT(*) FROM noticia_shares WHERE noticia_id = n.id) as compartidos
         FROM noticias n
-        LEFT JOIN metricas_visitas m ON n.id = m.noticia_id AND m.fecha >= ${dateFilter}
+        LEFT JOIN metricas_visitas m ON n.id = m.noticia_id AND m.fecha >= ${dateLimit}
         WHERE n.id = ?
         GROUP BY n.id
       `).bind(noticiaId).first();
@@ -2085,7 +2117,7 @@ app.get('/api/metricas', async (c) => {
 
       return c.json([{
         titulo: stats.titulo,
-        total_visitas: stats.vistas_totales_db || stats.total_visitas_registradas || 0,
+        total_visitas: Math.max(stats.vistas_totales_db, stats.total_visitas_registradas),
         vistas_unicas: stats.vistas_unicas || 0,
         fuentes: { 
           directo: stats.fuentes_directo || 0, 
@@ -2104,9 +2136,10 @@ app.get('/api/metricas', async (c) => {
       }]);
     } else {
       let query = `
-        SELECT n.id, n.titulo, COUNT(m.id) as total_visitas 
+        SELECT n.id, n.titulo, 
+          CASE WHEN COALESCE(n.vistas, 0) > COUNT(m.id) THEN COALESCE(n.vistas, 0) ELSE COUNT(m.id) END as total_visitas 
         FROM noticias n 
-        LEFT JOIN metricas_visitas m ON n.id = m.noticia_id AND m.fecha >= ${dateFilter}
+        LEFT JOIN metricas_visitas m ON n.id = m.noticia_id AND m.fecha >= ${dateLimit}
       `;
       const params = [];
       if (payload.rol === 'autor') {
@@ -2116,7 +2149,7 @@ app.get('/api/metricas', async (c) => {
       query += ' GROUP BY n.id, n.titulo ORDER BY total_visitas DESC LIMIT 10';
       
       const { results } = await c.env.DB.prepare(query).bind(...params).all();
-      return c.json(results || []);
+      return c.json(Array.isArray(results) ? results : []);
     }
   } catch (err: any) {
     return c.json({ error: err.message }, 500);

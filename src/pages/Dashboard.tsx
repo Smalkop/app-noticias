@@ -25,6 +25,7 @@ interface DashboardProps {
 
 export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   const [metricas, setMetricas] = useState<Metrica[]>([]);
+  const [globalImpact, setGlobalImpact] = useState(0);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [misNoticias, setMisNoticias] = useState<Noticia[]>([]);
   const [solicitudes, setSolicitudes] = useState<any[]>([]);
@@ -107,11 +108,16 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
     setLoading(true);
     try {
       if (activeTab === 'metrics') {
-        const results = await api.metricas.get(metricPeriod, selectedNoticiaId || undefined);
+        const [results, globalData] = await Promise.all([
+          api.metricas.get(metricPeriod, selectedNoticiaId || undefined),
+          api.metricas.get(metricPeriod, undefined, true)
+        ]);
+        
         if (selectedNoticiaId && results.length > 0) {
           setSelectedMetrica(results[0]);
         } else {
           setMetricas(results);
+          setGlobalImpact(globalData.total_impacto || 0);
         }
         if (user.rol === 'autor' || user.rol === 'admin') {
           const follows = await api.seguidores.misSeguidores();
@@ -667,9 +673,9 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                         <div>
                           <h3 className="text-lg font-bold opacity-80 mb-1">Impacto ({metricPeriod})</h3>
                           <p className="text-5xl font-serif font-bold">
-                            {Array.isArray(metricas) ? metricas.reduce((acc, m) => acc + m.total_visitas, 0) : 0}
+                            {globalImpact}
                           </p>
-                          <p className="text-sm opacity-60 mt-2">Visitas en el periodo seleccionado</p>
+                          <p className="text-sm opacity-60 mt-2">Alcance total de tus publicaciones</p>
                         </div>
                         <div className="mt-12 bg-white/10 p-4 rounded-xl backdrop-blur-sm">
                           <p className="text-xs font-bold uppercase tracking-wider mb-2">Tip del día</p>
