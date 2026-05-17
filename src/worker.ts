@@ -1005,53 +1005,54 @@ app.get('/api/setup-db', async (c) => {
 
 // RSS: Resumen semanal
 app.get('/api/rss/semanal', async (c) => {
-  // Log request for debugging to see if SendPulse is reaching the Edge
   try {
+    // Log request for debugging
     const ua = c.req.header('User-Agent') || 'unknown';
     const ip = c.req.header('cf-connecting-ip') || 'unknown';
     console.log(`RSS Request: UA=${ua}, IP=${ip}`);
-    await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
-      .bind(`RSS_FETCH: UA=${ua}, IP=${ip}`).run();
-  } catch(e) {}
-
-  try {
-    const TOP_LIMIT = 10;
-    const dateLimit = "datetime('now', '-7 days')";
     
-    // Fetch top 10 news of the week
+    try {
+      await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
+        .bind(`RSS_FETCH: UA=${ua}, IP=${ip}`).run();
+    } catch(e) {}
+
+    const TOP_LIMIT = 10;
+    
+    // Fetch last 10 published news (more robust than strictly last 7 days if news are sparse)
     const { results: news } = await c.env.DB.prepare(`
-      SELECT id, titulo, contenido, creado_en, vistas
+      SELECT id, titulo, contenido, creado_en, vistas, imagen_destacada
       FROM noticias
-      WHERE creado_en >= ${dateLimit} AND estado = 'publicado'
-      ORDER BY vistas DESC
+      WHERE estado = 'publicado'
+      ORDER BY creado_en DESC
       LIMIT ?
     `).bind(TOP_LIMIT).all();
 
-    // Use current request host to avoid hardcoding domain if testing on different URLs
     const url = new URL(c.req.url);
     const baseUrl = `${url.protocol}//${url.host}`;
     
-    let rss = `<?xml version="1.0" encoding="UTF-8" ?>
-<rss version="2.0">
+    let rss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
 <channel>
   <title>Lapacho Post | Resumen semanal</title>
   <link>${baseUrl}</link>
   <description>Las 10 noticias más importantes de la semana</description>
   <language>es-PY</language>
   <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+  <atom:link href="${baseUrl}/api/rss/semanal" rel="self" type="application/rss+xml" />
 `;
 
     (news || []).forEach((n: any) => {
-      // Basic summary from content (strip HTML and truncate)
-      const plainText = n.contenido.replace(/<[^>]*>?/gm, '').substring(0, 400).trim() + '...';
+      const plainText = n.contenido.replace(/<[^>]*>?/gm, '').substring(0, 500).trim() + '...';
+      const newsUrl = `${baseUrl}/noticia/${n.id}`;
       
-      // Use CDATA for content to safely handle special characters
       rss += `  <item>
     <title><![CDATA[${n.titulo}]]></title>
+    <link>${newsUrl}</link>
     <description><![CDATA[${plainText}]]></description>
-    <link>${baseUrl}/noticia/${n.id}</link>
     <guid isPermaLink="false">${n.id}</guid>
     <pubDate>${new Date(n.creado_en).toUTCString()}</pubDate>
+    ${n.imagen_destacada ? `<enclosure url="${n.imagen_destacada}" length="0" type="image/jpeg" />` : ''}
+    <content:encoded><![CDATA[${n.contenido}]]></content:encoded>
   </item>
 `;
     });
@@ -1059,15 +1060,47 @@ app.get('/api/rss/semanal', async (c) => {
     rss += `</channel>
 </rss>`;
 
-    return c.body(rss, 200, {
-      'Content-Type': 'application/rss+xml; charset=UTF-8',
-      'Cache-Control': 'public, max-age=60', // Reduce cache for testing
-      'Access-Control-Allow-Origin': '*'
+    return new Response(rss, {
+      headers: {
+        'Content-Type': 'application/xml; charset=UTF-8',
+        'Cache-Control': 'public, max-age=300',
+        'Access-Control-Allow-Origin': '*'
+      }
     });
 
   } catch (error: any) {
     console.error('RSS Error:', error);
     return c.text('Error generating RSS: ' + error.message, 500);
+  }
+});
+
+// Webhook: Payment Event Handler (Example provided by user)
+app.post('/api/webhook/payment', async (c) => {
+  try {
+    const payload = await c.req.json();
+    console.log('Payment Webhook Received:', JSON.stringify(payload));
+    
+    // Log to DB
+    await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
+      .bind(`PAYMENT_EVENT: ${JSON.stringify(payload)}`).run();
+      
+    // Example logic: if it's a success, maybe notify the user in-app
+    if (payload.payment && payload.payment.status === 'successful' && payload.user && payload.user.email) {
+      const user: any = await c.env.DB.prepare('SELECT id FROM usuarios WHERE email = ?')
+        .bind(payload.user.email).first();
+        
+      if (user) {
+        await c.env.DB.prepare(`
+          INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, leida)
+          VALUES (?, '¡Pago Confirmado!', 'Hemos recibido tu pago de ${payload.payment.amount} ${payload.payment.currency}. ¡Gracias por tu apoyo!', 'sistema', 0)
+        `).bind(user.id).run();
+      }
+    }
+
+    return c.json({ success: true, message: 'Event logged and processed' });
+  } catch (err: any) {
+    console.error('Payment Webhook Error:', err);
+    return c.json({ error: err.message }, 400);
   }
 });
 
