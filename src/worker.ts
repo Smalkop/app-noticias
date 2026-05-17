@@ -1116,6 +1116,7 @@ app.get('/api/json-feed/semanal', async (c) => {
       noticias: (news || []).map((n: any) => ({
         id: n.id,
         titulo: n.titulo,
+        descripcion: n.contenido.replace(/<[^>]*>?/gm, '').substring(0, 300).trim() + '...',
         autor: {
           nombre: n.autor_nombre,
           id: n.autor_id
