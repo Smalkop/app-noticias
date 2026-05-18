@@ -679,12 +679,17 @@ app.get('/api/paginas/:slug', async (c) => {
 app.get('/api/admin/paginas', async (c) => {
   const token = getCookie(c, 'token');
   if (!token) return c.json({ error: 'No autorizado' }, 401);
-  const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-  const payload = await verify(token, secret, 'HS256') as any;
-  if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256') as any;
+    if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
 
-  const { results } = await c.env.DB.prepare('SELECT * FROM paginas').all();
-  return c.json(results || []);
+    const { results } = await c.env.DB.prepare('SELECT * FROM paginas').all();
+    return c.json(results || []);
+  } catch (err: any) {
+    if (err.message.includes('no such table')) return c.json([]);
+    throw err;
+  }
 });
 
 app.post('/api/admin/paginas', async (c) => {
@@ -717,8 +722,15 @@ app.get('/api/admin/verificaciones', async (c) => {
   const payload = await verify(token, secret, 'HS256') as any;
   if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
 
-  const { results } = await c.env.DB.prepare('SELECT id, nombre, email, selfie, cedula_frontal, cedula_trasera, estado_verificacion FROM usuarios WHERE estado_verificacion = "pendiente"').all();
-  return c.json(results || []);
+  try {
+    const { results } = await c.env.DB.prepare('SELECT id, nombre, email, selfie, cedula_frontal, cedula_trasera, estado_verificacion FROM usuarios WHERE estado_verificacion = "pendiente"').all();
+    return c.json(results || []);
+  } catch (err: any) {
+    if (err.message.includes('no such column')) {
+      return c.json([]); // Return empty if columns don't exist yet
+    }
+    throw err;
+  }
 });
 
 app.post('/api/admin/verificaciones/:id', async (c) => {
@@ -736,14 +748,19 @@ app.post('/api/admin/verificaciones/:id', async (c) => {
 });
 
 // Patrocinios: My Requests
-app.get('/api/patrocinios/mis-solicitudes', async (c) => {
+app.get('/api/patrocinios/mis-patrocinios', async (c) => {
   const token = getCookie(c, 'token');
   if (!token) return c.json({ error: 'No autorizado' }, 401);
-  const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-  const payload = await verify(token, secret, 'HS256') as any;
-  
-  const { results } = await c.env.DB.prepare('SELECT * FROM patrocinios WHERE autor_id = ?').bind(payload.id).all();
-  return c.json(results || []);
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256') as any;
+    
+    const { results } = await c.env.DB.prepare('SELECT * FROM patrocinios WHERE autor_id = ?').bind(payload.id).all();
+    return c.json(results || []);
+  } catch (err: any) {
+    if (err.message.includes('no such table')) return c.json([]);
+    throw err;
+  }
 });
 
 // Patrocinios: Request
@@ -1376,9 +1393,55 @@ app.get('/api/admin/migrar-db', async (c) => {
       );
     `).catch(() => console.log('Tablas ya existen'));
 
-    // User verification and phone migration - INDIVIDUAL statements
     await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN verificado INTEGER DEFAULT 0`).catch(() => console.log('Columna verificado ya existe'));
     await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN telefono TEXT`).catch(() => console.log('Columna telefono ya existe'));
+    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN selfie TEXT`).catch(() => console.log('Columna selfie ya existe'));
+    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN cedula_frontal TEXT`).catch(() => console.log('Columna cedula_frontal ya existe'));
+    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN cedula_trasera TEXT`).catch(() => console.log('Columna cedula_trasera ya existe'));
+    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN estado_verificacion TEXT DEFAULT 'ninguno'`).catch(() => console.log('Columna estado_verificacion ya existe'));
+
+    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN patrocinio_id TEXT`).catch(() => console.log('Columna patrocinio_id ya existe'));
+
+    // New tables
+    await c.env.DB.exec(`
+      CREATE TABLE IF NOT EXISTS paginas (
+        id TEXT PRIMARY KEY,
+        slug TEXT UNIQUE NOT NULL,
+        titulo TEXT NOT NULL,
+        contenido TEXT NOT NULL,
+        activa INTEGER DEFAULT 1,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE IF NOT EXISTS patrocinios (
+        id TEXT PRIMARY KEY,
+        autor_id TEXT NOT NULL,
+        marca TEXT NOT NULL,
+        ruc TEXT,
+        monto REAL NOT NULL,
+        comprobante TEXT,
+        estado TEXT DEFAULT 'pendiente',
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (autor_id) REFERENCES usuarios(id)
+      );
+      CREATE TABLE IF NOT EXISTS reacciones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        noticia_id TEXT,
+        usuario_id TEXT,
+        tipo TEXT,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(noticia_id, usuario_id),
+        FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+      );
+      CREATE TABLE IF NOT EXISTS noticia_shares (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        noticia_id TEXT,
+        plataforma TEXT,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE
+      );
+    `).catch(() => console.log('Tablas ya existen'));
 
     // Webhook logs table if missing
     await c.env.DB.exec(`
@@ -2196,18 +2259,19 @@ app.get('/api/admin/patrocinios', async (c) => {
 
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-    const payload = await verify(token, secret, 'HS256');
+    const payload = await verify(token, secret, 'HS256') as any;
     if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
 
     const { results } = await c.env.DB.prepare(`
-      SELECT n.id, n.titulo, n.patrocinio_marca, n.patrocinio_monto, n.patrocinio_ruc, n.patrocinio_estado, n.patrocinio_comprobante, u.nombre as autor_nombre
-      FROM noticias n 
-      JOIN usuarios u ON n.autor_id = u.id
-      WHERE n.patrocinada = 1 
-      ORDER BY n.creado_en DESC
+      SELECT p.*, u.nombre as autor_nombre
+      FROM patrocinios p 
+      JOIN usuarios u ON p.autor_id = u.id
+      WHERE p.estado = 'pendiente'
+      ORDER BY p.creado_en DESC
     `).all();
     return c.json(results || []);
   } catch (error: any) {
+    if (error.message.includes('no such table')) return c.json([]);
     return c.json({ error: 'Error al obtener patrocinios', details: error.message }, 500);
   }
 });
@@ -2217,24 +2281,27 @@ app.post('/api/admin/patrocinios/:id/estado', async (c) => {
   const token = getCookie(c, 'token');
   if (!token) return c.json({ error: 'No autorizado' }, 401);
 
-  const newsId = c.req.param('id');
+  const patrocinioId = c.req.param('id');
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-    const payload = await verify(token, secret, 'HS256');
+    const payload = await verify(token, secret, 'HS256') as any;
     if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
 
     const { estado } = await c.req.json();
     
-    const noticia: any = await c.env.DB.prepare('SELECT autor_id, titulo FROM noticias WHERE id = ?').bind(newsId).first();
-    if (!noticia) return c.json({ error: 'Noticia no encontrada' }, 404);
+    const patrocinio: any = await c.env.DB.prepare('SELECT autor_id, marca FROM patrocinios WHERE id = ?').bind(patrocinioId).first();
+    if (!patrocinio) return c.json({ error: 'Patrocinio no encontrado' }, 404);
 
-    await c.env.DB.prepare("UPDATE noticias SET patrocinio_estado = ? WHERE id = ?").bind(estado, newsId).run();
+    await c.env.DB.prepare("UPDATE patrocinios SET estado = ? WHERE id = ?").bind(estado, patrocinioId).run();
 
     // Notificar al autor
-    await c.env.DB.prepare("INSERT INTO notificaciones (usuario_id, mensaje, tipo) VALUES (?, ?, ?)").bind(
-      noticia.autor_id, 
-      `El patrocinio para tu noticia "${noticia.titulo}" ha cambiado de estado a: ${estado}.`, 
-      estado === 'aceptado' ? 'success' : (estado === 'rechazado' ? 'error' : 'info')
+    await c.env.DB.prepare(`
+      INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo) 
+      VALUES (?, 'Estado de Patrocinio', ?, 'sistema')
+    `).bind(
+      patrocinio.autor_id, 
+      `El patrocinio para la marca "${patrocinio.marca}" ha cambiado de estado a: ${estado}.`,
+      'sistema'
     ).run();
 
     return c.json({ message: 'Estado de patrocinio actualizado' });
