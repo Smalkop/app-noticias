@@ -21,7 +21,7 @@ export default function NewsCard({ noticia, featured = false }: NewsCardProps) {
       <motion.div 
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
-        className="group relative overflow-hidden rounded-xl bg-gray-900 aspect-[16/9] md:aspect-[21/9]"
+        className="group relative overflow-hidden rounded-xl bg-gray-900 aspect-video"
       >
         <img 
           src={noticia.imagen_destacada || 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&auto=format&fit=crop&q=60'} 

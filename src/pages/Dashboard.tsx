@@ -1250,9 +1250,14 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-black text-gray-400 uppercase tracking-widest">Imagen Principal (Fija al inicio)</label>
-                    <div className="relative group">
+                    <div className="space-y-2">
+                      <label className="text-sm font-black text-gray-400 uppercase tracking-widest block">
+                        Imagen Principal (Fija al inicio)
+                      </label>
+                      <p className="text-[10px] text-red-600 font-bold bg-red-50 inline-block px-2 py-0.5 rounded">
+                        ℹ️ Se recomienda subir imágenes en formato 16:9 para un mejor resultado visual.
+                      </p>
+                      <div className="relative group mt-2">
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         <ImageIcon className="h-5 w-5 text-gray-400" />
                       </div>
@@ -1271,7 +1276,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                         <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'news')} accept="image/*" />
                       </label>
                       {imagenUrl && (
-                        <div className="w-24 h-24 rounded-xl overflow-hidden shadow-sm border-2 border-white relative group">
+                        <div className="w-32 aspect-video rounded-xl overflow-hidden shadow-sm border-2 border-white relative group">
                           <img src={imagenUrl} alt="Preview" className="w-full h-full object-cover" />
                           <button type="button" onClick={() => setImagenUrl('')} className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <Trash2 className="w-6 h-6 text-white" />

@@ -220,7 +220,7 @@ export default function Article({ user }: ArticleProps) {
           <img 
             src={noticia.imagen_destacada || 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=1200&auto=format&fit=crop&q=80'} 
             alt={noticia.titulo}
-            className="w-full rounded-xl mb-12 shadow-2xl"
+            className="w-full aspect-video object-cover rounded-xl mb-12 shadow-2xl"
           />
 
           <div className="prose prose-lg max-w-none prose-headings:font-serif prose-red prose-p:text-gray-700 prose-p:leading-relaxed prose-p:mb-6">
