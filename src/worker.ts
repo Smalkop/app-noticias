@@ -1728,14 +1728,14 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
 
     const { access_token } = await authRes.json() as any;
 
-    // 2. Prepare Payload (Enforced structure based on user feedback)
-    const spEventUrl = "https://events.sendpulse.com/events/name/nuevo_evento_2026_05_18";
+    // 2. Prepare Payload (PROHIBIDO MODIFICAR ESTRUCTURA SEGÚN USUARIO)
+    const spEventUrl = "https://events.sendpulse.com/events/id/92809886656c4d7fca369e52e2b6e38a/8406546";
     const url = new URL(c.req.url);
     const baseUrl = `${url.protocol}//${url.host}`;
     
     const eventPayload = {
-      email: payload.email, // Common identifier
-      phone: "", // Optional
+      email: payload.email, 
+      phone: "", 
       event_id: `digest_${Date.now()}`,
       timestamp: new Date().toISOString(),
       event_type: "noticias_semanales",

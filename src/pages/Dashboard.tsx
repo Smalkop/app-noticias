@@ -10,7 +10,7 @@ import {
   Settings, User as UserIcon, Trash2, Edit, CheckCircle, XCircle,
   Clock, AlertCircle, Bell, Users, Calendar, ArrowUpRight, 
   Smartphone, Monitor, Globe, Activity, ChevronLeft, ChevronRight,
-  Eye, Share2, Database, ShieldAlert, RefreshCw, Rss
+  Eye, Share2, Database, ShieldAlert, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { compressImage } from '../lib/imageUtils';
@@ -1438,15 +1438,6 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                   </button>
 
                   <div className="flex flex-wrap gap-4">
-                    <a 
-                      href="/api/rss/semanal"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition-all flex items-center gap-2"
-                    >
-                      <Rss className="w-5 h-5" /> RSS Semanal
-                    </a>
-
                     <a 
                       href="/api/json-feed/semanal"
                       target="_blank"
