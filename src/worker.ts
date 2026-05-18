@@ -1401,6 +1401,7 @@ app.get('/api/admin/migrar-db', async (c) => {
     await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN estado_verificacion TEXT DEFAULT 'ninguno'`).catch(() => console.log('Columna estado_verificacion ya existe'));
 
     await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN patrocinio_id TEXT`).catch(() => console.log('Columna patrocinio_id ya existe'));
+    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN patrocinada INTEGER DEFAULT 0`).catch(() => console.log('Columna patrocinada ya existe'));
 
     // New tables
     await c.env.DB.exec(`
@@ -2431,14 +2432,20 @@ app.get('/api/noticias/:id', async (c) => {
 
   try {
     const noticia: any = await c.env.DB.prepare(
-      `SELECT n.*, u.nombre as autor_nombre, u.bio as autor_bio, c.nombre as categoria_nombre, c.slug as categoria_slug,
+      `SELECT n.*, u.nombre as autor_nombre, u.bio as autor_bio, u.foto_perfil as autor_foto, c.nombre as categoria_nombre, c.slug as categoria_slug,
        p.marca as patrocinio_marca, p.ruc as patrocinio_ruc, p.monto as patrocinio_monto
        FROM noticias n 
        JOIN usuarios u ON n.autor_id = u.id 
        JOIN categorias c ON n.categoria_id = c.id 
        LEFT JOIN patrocinios p ON n.patrocinio_id = p.id
        WHERE n.id = ?`
-    ).bind(id).first();
+    ).bind(id).first().catch(async (e: any) => {
+      // Fallback query if sponsorship columns/table don't exist yet
+      console.error('SQL Error, using fallback news query:', e.message);
+      return await c.env.DB.prepare(
+        'SELECT n.*, u.nombre as autor_nombre, u.bio as autor_bio, u.foto_perfil as autor_foto, c.nombre as categoria_nombre, c.slug as categoria_slug FROM noticias n JOIN usuarios u ON n.autor_id = u.id JOIN categorias c ON n.categoria_id = c.id WHERE n.id = ?'
+      ).bind(id).first();
+    });
 
     if (noticia) {
       // Reacciones count
