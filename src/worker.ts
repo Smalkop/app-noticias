@@ -11,6 +11,8 @@ type Bindings = {
   JWT_SECRET: string;
   'id sendpulse': string;
   'secret sendpulse': string;
+  SENDPULSE_ID: string;
+  SENDPULSE_SECRET: string;
   SENDPULSE_LIST_ID: string;
 };
 
@@ -1666,6 +1668,17 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
     const payload = await verify(token, secret, 'HS256') as any;
     if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
 
+    // Ensure logs table exists
+    try {
+      await c.env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS webhook_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          payload TEXT,
+          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+    } catch(e) {}
+
     // 1. Get Top 10 News (Last 7 Days)
     const dateLimit = "datetime('now', '-7 days')";
     let { results: news } = await c.env.DB.prepare(`
@@ -1679,7 +1692,6 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
       LIMIT 10
     `).all();
 
-    // Fallback if empty in last 7 days
     if (!news || news.length === 0) {
       const fallback = await c.env.DB.prepare(`
         SELECT n.id, n.titulo, n.subtitulo, n.contenido, n.imagen_destacada, n.vistas, n.publicado_en, 
@@ -1694,10 +1706,12 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
       news = fallback.results;
     }
 
-    const spId = c.env['id sendpulse'];
-    const spSecret = c.env['secret sendpulse'];
+    // Env Var Fallbacks
+    const spId = c.env['id sendpulse'] || c.env.SENDPULSE_ID;
+    const spSecret = c.env['secret sendpulse'] || c.env.SENDPULSE_SECRET;
+    
     if (!spId || !spSecret) {
-      return c.json({ error: 'Credenciales de SendPulse no configuradas' }, 400);
+      return c.json({ error: 'Faltan credenciales de SendPulse (ID/Secret) en variables de entorno.' }, 400);
     }
 
     // Attempt auth
@@ -1709,41 +1723,45 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
 
     if (!authRes.ok) {
       const text = await authRes.text();
-      return c.json({ error: 'Error de autenticación SendPulse', details: text }, 500);
+      return c.json({ error: 'Error de autenticación SendPulse (OAuth)', details: text }, 500);
     }
 
     const { access_token } = await authRes.json() as any;
 
-    // 2. Prepare Payload (Rediseñado según ejemplo de usuario)
+    // 2. Prepare Payload (Enforced structure based on user feedback)
     const spEventUrl = "https://events.sendpulse.com/events/name/nuevo_evento_2026_05_18";
     const url = new URL(c.req.url);
     const baseUrl = `${url.protocol}//${url.host}`;
     
-    // El usuario quiere el formato JSON basado en su ejemplo aplicado a noticias
     const eventPayload = {
-      email: payload.email, // Contacto que dispara el evento (Admin)
-      event_id: `weekly_${Date.now()}`,
+      email: payload.email, // Common identifier
+      phone: "", // Optional
+      event_id: `digest_${Date.now()}`,
       timestamp: new Date().toISOString(),
-      event_type: "weekly_popular_news",
+      event_type: "noticias_semanales",
       user: {
         user_id: payload.id,
         email: payload.email,
         name: payload.nombre
       },
       order: {
-        order_id: `digest_${new Date().toISOString().split('T')[0]}`,
+        order_id: `week_${new Date().toISOString().split('T')[0]}`,
+        order_date: new Date().toISOString(),
+        order_status: "active",
+        total_price: news.length,
         items: (news || []).map((item: any) => ({
           item_id: item.id,
           name: item.titulo,
           quantity: item.vistas || 0,
           price: 0,
           link: `${baseUrl}/noticia/${item.id}`,
-          description: item.subtitulo || (item.contenido.replace(/<[^>]*>?/gm, '').substring(0, 150) + '...')
+          image_url: item.imagen_destacada || "",
+          description: item.subtitulo || (item.contenido.replace(/<[^>]*>?/gm, '').substring(0, 200) + '...')
         }))
       },
       metadata: {
-        total_items: (news || []).length,
-        source: "Lapacho Post Automated Task"
+        platform: "Lapacho Post",
+        count: news.length
       }
     };
 
@@ -1751,44 +1769,41 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
     const spResponse = await fetch(spEventUrl, {
       method: 'POST',
       headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${access_token}`
+        'Authorization': `Bearer ${access_token}`,
+        'Content-Type': 'application/json' 
       },
       body: JSON.stringify(eventPayload)
     });
 
-    const spData = await spResponse.text();
+    const spDataText = await spResponse.text();
+    let spData: any;
+    try { spData = JSON.parse(spDataText); } catch(e) { spData = spDataText; }
     
-    // Log to DB (Safe)
+    // Log interaction
     try {
-      await c.env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS webhook_logs (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          payload TEXT,
-          creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `).run();
       await c.env.DB.prepare('INSERT INTO webhook_logs (payload) VALUES (?)')
-        .bind(`[SENDPULSE EVENT TRIGGER] Status: ${spResponse.status} - Response: ${spData}`)
+        .bind(`[EVENT_TRIGGER] URL: ${spEventUrl} | Status: ${spResponse.status} | Resp: ${spDataText}`)
         .run();
-    } catch (e) {
-      console.error('Logging error:', e);
-    }
+    } catch (e) {}
 
     if (!spResponse.ok) {
-      return c.json({ error: 'Error enviando evento a SendPulse', details: spData }, 500);
+      return c.json({ 
+        error: 'SendPulse rechazó el evento', 
+        status: spResponse.status,
+        details: spData 
+      }, 500);
     }
 
     return c.json({ 
       success: true, 
-      message: 'Evento de noticias destacadas enviado correctamente a SendPulse', 
-      count: news.length,
-      sendpulse_response: spData
+      message: 'Evento enviado con éxito a SendPulse', 
+      news_count: news.length,
+      response: spData
     });
 
   } catch (err: any) {
     console.error('Trigger Event Error:', err);
-    return c.json({ error: err.message }, 500);
+    return c.json({ error: 'Error interno: ' + err.message }, 500);
   }
 });
 
