@@ -1679,32 +1679,25 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
       `).run();
     } catch(e) {}
 
+    // 0. Fetch Admin Info (for real email and phone)
+    const adminUser: any = await c.env.DB.prepare('SELECT nombre, email, telefono FROM usuarios WHERE id = ?')
+      .bind(payload.id).first();
+
     // 1. Get Top 10 News (Last 7 Days)
     const dateLimit = "datetime('now', '-7 days')";
-    let { results: news } = await c.env.DB.prepare(`
-      SELECT n.id, n.titulo, n.subtitulo, n.contenido, n.imagen_destacada, n.vistas, n.publicado_en, 
-             u.nombre as autor_nombre, c.nombre as categoria_nombre
+    const newsQuery = `
+      SELECT n.id, n.titulo, n.subtitulo, n.contenido, n.imagen_destacada, n.vistas, n.publicado_en, n.creado_en,
+             u.id as autor_id, u.nombre as autor_nombre, c.nombre as categoria_nombre
       FROM noticias n
       JOIN usuarios u ON n.autor_id = u.id
       JOIN categorias c ON n.categoria_id = c.id
-      WHERE n.estado = 'publicado' AND n.publicado_en >= ${dateLimit}
-      ORDER BY n.vistas DESC
+      WHERE n.estado = 'publicado' 
+      ORDER BY n.vistas DESC, n.creado_en DESC
       LIMIT 10
-    `).all();
-
-    if (!news || news.length === 0) {
-      const fallback = await c.env.DB.prepare(`
-        SELECT n.id, n.titulo, n.subtitulo, n.contenido, n.imagen_destacada, n.vistas, n.publicado_en, 
-               u.nombre as autor_nombre, c.nombre as categoria_nombre
-        FROM noticias n
-        JOIN usuarios u ON n.autor_id = u.id
-        JOIN categorias c ON n.categoria_id = c.id
-        WHERE n.estado = 'publicado'
-        ORDER BY n.vistas DESC
-        LIMIT 10
-      `).all();
-      news = fallback.results;
-    }
+    `;
+    // We remove the hard dateLimit filter to ensure we always have 10 news if they exist, 
+    // but the system still labels them as "semanales" based on views.
+    const { results: news } = await c.env.DB.prepare(newsQuery).all();
 
     // Env Var Fallbacks
     const spId = c.env['id sendpulse'] || c.env.SENDPULSE_ID;
@@ -1734,8 +1727,8 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
     const baseUrl = `${url.protocol}//${url.host}`;
     
     const eventPayload = {
-      email: payload.email, 
-      phone: "", 
+      email: adminUser?.email || payload.email, 
+      phone: adminUser?.telefono || "", 
       event_id: `digest_${Date.now()}`,
       timestamp: new Date().toISOString(),
       event_type: "weekly_popular_content",
@@ -1746,7 +1739,7 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
       noticias: (news || []).map((n: any) => ({
         id: n.id,
         titulo: n.titulo,
-        descripcion: n.contenido.replace(/<[^>]*>?/gm, '').substring(0, 300).trim() + '...',
+        descripcion: (n.subtitulo || n.contenido.replace(/<[^>]*>?/gm, '')).substring(0, 300).trim() + '...',
         autor: {
           nombre: n.autor_nombre,
           id: n.autor_id
@@ -1758,16 +1751,15 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
           publico: `${baseUrl}/noticia/${n.id}`,
           miniatura: n.imagen_destacada ? (n.imagen_destacada.startsWith('http') ? n.imagen_destacada : `${baseUrl}${n.imagen_destacada}`) : ""
         },
-        publicado_el: n.publicado_en
+        publicado_el: n.publicado_en || n.creado_en
       })),
       metadata: {
         server: "Lapacho_Edge_Worker",
-        source: "Manual_Trigger",
         request_ip: c.req.header('cf-connecting-ip') || '0.0.0.0'
       }
     };
 
-    // 3. Send to SendPulse
+    // 3. Send to SendPulse (POST RAW JSON)
     const spResponse = await fetch(spEventUrl, {
       method: 'POST',
       headers: { 
