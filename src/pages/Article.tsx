@@ -224,9 +224,7 @@ export default function Article({ user }: ArticleProps) {
           />
 
           <div className="prose prose-lg max-w-none prose-headings:font-serif prose-red prose-p:text-gray-700 prose-p:leading-relaxed prose-p:mb-6">
-            {noticia.contenido?.split('\n').map((para, i) => (
-              <p key={i}>{para}</p>
-            ))}
+            <div dangerouslySetInnerHTML={{ __html: noticia.contenido }} />
           </div>
 
           <div className="mt-8 pt-8 border-t border-gray-100">
@@ -305,6 +303,23 @@ export default function Article({ user }: ArticleProps) {
             {siguiendo && (
               <div className="flex items-center justify-center gap-2 py-3 bg-gray-800 text-gray-400 rounded-lg text-sm font-bold border border-gray-700">
                 <Check className="w-4 h-4" /> Siguiendo
+              </div>
+            )}
+            
+            {noticia.patrocinio_id && (
+              <div className="mt-8 p-6 bg-red-50 rounded-2xl border border-red-100 flex flex-col gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
+                  <span className="text-[10px] font-black text-red-600 uppercase tracking-widest">Contenido Patrocinado</span>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-bold mb-1">Este espacio es posible gracias a:</p>
+                  <p className="font-serif text-xl font-black text-gray-900 leading-tight">{noticia.patrocinio_marca}</p>
+                  <p className="text-[10px] text-gray-400 font-mono mt-1">RUC: {noticia.patrocinio_ruc}</p>
+                </div>
+                <div className="pt-4 border-t border-red-100 italic text-[11px] text-red-700 leading-snug">
+                  "Lapacho Post mantiene su independencia editorial. El contenido patrocinado no influye en nuestra línea periodística."
+                </div>
               </div>
             )}
 

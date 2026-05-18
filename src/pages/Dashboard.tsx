@@ -18,6 +18,11 @@ import { Seguidor, Notificacion } from '../types';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+
 interface DashboardProps {
   user: User;
   onUserUpdate: (updatedUser: User) => void;
@@ -45,7 +50,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   useEffect(() => {
     fetchUnreadCount();
   }, []);
-  const [activeTab, setActiveTab] = useState<'metrics' | 'create' | 'manage' | 'profile' | 'admin' | 'notifications' | 'users'>('metrics');
+  const [activeTab, setActiveTab] = useState<'metrics' | 'create' | 'manage' | 'profile' | 'admin' | 'notifications' | 'users' | 'verify' | 'sponsorships' | 'pages'>('metrics');
   const [metricPeriod, setMetricPeriod] = useState('mes');
   const [selectedMetrica, setSelectedMetrica] = useState<Metrica | null>(null);
   const [selectedNoticiaId, setSelectedNoticiaId] = useState<string | null>(null);
@@ -69,6 +74,24 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   const [patrocinioMarca, setPatrocinioMarca] = useState('');
   const [patrocinioRUC, setPatrocinioRUC] = useState('');
   const [adminPatrocinios, setAdminPatrocinios] = useState<any[]>([]);
+
+  // Form state for Pages
+  const [editingPageId, setEditingPageId] = useState<string | null>(null);
+  const [pageSlug, setPageSlug] = useState('');
+  const [pageTitle, setPageTitle] = useState('');
+  const [pageContent, setPageContent] = useState('');
+  const [pageActive, setPageActive] = useState(true);
+  const [adminPages, setAdminPages] = useState<any[]>([]);
+
+  // Verification state for Authors
+  const [selfieUrl, setSelfieUrl] = useState('');
+  const [cedulaFrontalUrl, setCedulaFrontalUrl] = useState('');
+  const [cedulaTraseraUrl, setCedulaTraseraUrl] = useState('');
+  const [adminVerificaciones, setAdminVerificaciones] = useState<any[]>([]);
+
+  // Sponsorship flow redesign
+  const [misPatrocinios, setMisPatrocinios] = useState<any[]>([]);
+  const [selectedPatrocinioId, setSelectedPatrocinioId] = useState<string | null>(null);
 
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -128,13 +151,23 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
       } else if (activeTab === 'create') {
         const results = await api.categorias.list();
         setCategorias(results);
+      } else if (activeTab === 'sponsorships') {
+        const results = await api.patrocinios.misPatrocinios();
+        setMisPatrocinios(results);
+      } else if (activeTab === 'verify') {
+        // No special action needed, just initial render
+      } else if (activeTab === 'pages' && user.rol === 'admin') {
+        const results = await api.admin.listPaginas();
+        setAdminPages(results);
       } else if (activeTab === 'admin' && user.rol === 'admin') {
-        const [solics, patrocs] = await Promise.all([
+        const [solics, patrocs, vers] = await Promise.all([
           api.admin.listSolicitudes(),
-          api.admin.listPatrocinios()
+          api.admin.listPatrocinios(),
+          api.admin.listVerificaciones()
         ]);
         setSolicitudes(solics);
         setAdminPatrocinios(patrocs);
+        setAdminVerificaciones(vers);
       } else if (activeTab === 'notifications') {
         const [notics, news] = await Promise.all([
           api.notificaciones.list(),
@@ -157,7 +190,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
     }
   }, [metricPeriod, selectedNoticiaId]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'news' | 'profile' = 'news') => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'news' | 'profile' | 'selfie' | 'cedula_frontal' | 'cedula_trasera' = 'news') => {
     const file = e.target.files?.[0];
     if (!file) return;
     
@@ -178,8 +211,14 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
       const { url } = await api.upload(compressedFile);
       if (type === 'news') {
         setImagenUrl(url);
-      } else {
+      } else if (type === 'profile') {
         setPerfilUrl(url);
+      } else if (type === 'selfie') {
+        setSelfieUrl(url);
+      } else if (type === 'cedula_frontal') {
+        setCedulaFrontalUrl(url);
+      } else if (type === 'cedula_trasera') {
+        setCedulaTraseraUrl(url);
       }
     } catch (error) {
       alert('Error procesando o subiendo imagen');
@@ -198,10 +237,8 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
         categoria_id: Number(categoriaId),
         imagen_destacada: imagenUrl,
         estado: 'publicado',
-        patrocinada,
-        patrocinio_monto: patrocinada ? Number(patrocinioMonto) : undefined,
-        patrocinio_marca: patrocinada ? patrocinioMarca : undefined,
-        patrocinio_ruc: patrocinada ? patrocinioRUC : undefined,
+        patrocinada: !!selectedPatrocinioId,
+        patrocinio_id: selectedPatrocinioId
       };
 
       if (editingId) {
@@ -288,10 +325,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
     setContenido(noticia.contenido);
     setCategoriaId(String(noticia.categoria_id));
     setImagenUrl(noticia.imagen_destacada || '');
-    setPatrocinada(!!noticia.patrocinada);
-    setPatrocinioMonto(noticia.patrocinio_monto ? String(noticia.patrocinio_monto) : '');
-    setPatrocinioMarca(noticia.patrocinio_marca || '');
-    setPatrocinioRUC(noticia.patrocinio_ruc || '');
+    setSelectedPatrocinioId(noticia.patrocinio_id || null);
     setActiveTab('create');
   };
 
@@ -421,6 +455,30 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
               onClick={() => setActiveTab('users')} 
               icon={<Users className="w-4 h-4" />} 
               label="Usuarios" 
+            />
+          )}
+          {user.rol === 'autor' && (
+            <TabButton 
+              active={activeTab === 'verify'} 
+              onClick={() => setActiveTab('verify')} 
+              icon={<ShieldAlert className="w-4 h-4" />} 
+              label="Verificar Identidad" 
+            />
+          )}
+          {user.rol === 'autor' && (
+            <TabButton 
+              active={activeTab === 'sponsorships'} 
+              onClick={() => setActiveTab('sponsorships')} 
+              icon={<Activity className="w-4 h-4" />} 
+              label="Patrocinios" 
+            />
+          )}
+          {user.rol === 'admin' && (
+            <TabButton 
+              active={activeTab === 'pages'} 
+              onClick={() => setActiveTab('pages')} 
+              icon={<Database className="w-4 h-4" />} 
+              label="Páginas" 
             />
           )}
           <TabButton 
@@ -861,160 +919,428 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
               </div>
             )}
 
-            {activeTab === 'create' && (
-              <div className="max-w-4xl mx-auto">
-                <form onSubmit={handleNewsSubmit} className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm space-y-8">
-                  {success && (
-                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-green-50 text-green-700 p-4 rounded-lg font-bold text-center border border-green-100">
-                      {success}
-                    </motion.div>
-                  )}
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-6 md:col-span-2">
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Título de la noticia</label>
-                        <input 
-                          type="text" 
-                          required
-                          value={titulo}
-                          onChange={(e) => setTitulo(e.target.value)}
-                          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none"
-                          placeholder="Ej: Histórico acuerdo comercial..."
-                        />
+            {activeTab === 'verify' && (
+              <div className="max-w-2xl mx-auto">
+                <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-xl space-y-8">
+                  <div className="text-center">
+                    <ShieldAlert className="w-16 h-16 text-red-600 mx-auto mb-4" />
+                    <h2 className="text-3xl font-serif font-black text-gray-900">Verificación de Identidad</h2>
+                    <p className="text-gray-500 mt-2">Para mantener la integridad de Lapacho Post, requerimos que todos los autores verifiquen su identidad real.</p>
+                  </div>
+
+                  {user.estado_verificacion === 'aprobado' ? (
+                    <div className="bg-green-50 border border-green-200 p-6 rounded-2xl text-center">
+                      <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
+                      <h4 className="font-bold text-green-900 text-xl">Identidad Verificada</h4>
+                      <p className="text-green-700">Tu cuenta está plenamente validada. Gracias por ser parte de nuestra red de confianza.</p>
+                    </div>
+                  ) : user.estado_verificacion === 'pendiente' ? (
+                    <div className="bg-blue-50 border border-blue-200 p-6 rounded-2xl text-center">
+                      <Clock className="w-12 h-12 text-blue-600 mx-auto mb-4" />
+                      <h4 className="font-bold text-blue-900 text-xl">Verificación en Proceso</h4>
+                      <p className="text-blue-700">Estamos revisando tus documentos. Recibirás una notificación una vez que completemos el proceso.</p>
+                    </div>
+                  ) : (
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      setLoading(true);
+                      try {
+                        await api.auth.updatePerfil({
+                          selfie: selfieUrl,
+                          cedula_frontal: cedulaFrontalUrl,
+                          cedula_trasera: cedulaTraseraUrl,
+                          nombre, bio, foto_perfil: perfilUrl, telefono // preserve other fields
+                        });
+                        alert('Documentos enviados correctamente.');
+                        const freshUser = await api.auth.me();
+                        onUserUpdate(freshUser);
+                      } catch (err) {
+                        alert('Error al enviar documentos');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }} className="space-y-6">
+                      <div className="space-y-4">
+                        <label className="block text-sm font-black text-gray-400 uppercase tracking-widest">1. Selfie con Rostro Visible</label>
+                        <div className="flex items-center gap-4">
+                          <label className="flex-1 cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center gap-2 hover:border-red-400 text-gray-500">
+                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'selfie')} />
+                            <ImageIcon className="w-8 h-8" />
+                            <span className="text-sm font-bold">{uploading ? 'Subiendo...' : 'Subir Selfie'}</span>
+                          </label>
+                          {selfieUrl && <img src={selfieUrl} className="w-24 h-24 object-cover rounded-xl border-2 border-white shadow-sm" />}
+                        </div>
+
+                        <label className="block text-sm font-black text-gray-400 uppercase tracking-widest">2. Foto de Cédula (Frente)</label>
+                        <div className="flex items-center gap-4">
+                          <label className="flex-1 cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center gap-2 hover:border-red-400 text-gray-500">
+                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'cedula_frontal')} />
+                            <ImageIcon className="w-8 h-8" />
+                            <span className="text-sm font-bold">{uploading ? 'Subiendo...' : 'Subir Frente'}</span>
+                          </label>
+                          {cedulaFrontalUrl && <img src={cedulaFrontalUrl} className="w-24 h-24 object-cover rounded-xl border-2 border-white shadow-sm" />}
+                        </div>
+
+                        <label className="block text-sm font-black text-gray-400 uppercase tracking-widest">3. Foto de Cédula (Dorso)</label>
+                        <div className="flex items-center gap-4">
+                          <label className="flex-1 cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center gap-2 hover:border-red-400 text-gray-500">
+                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'cedula_trasera')} />
+                            <ImageIcon className="w-8 h-8" />
+                            <span className="text-sm font-bold">{uploading ? 'Subiendo...' : 'Subir Dorso'}</span>
+                          </label>
+                          {cedulaTraseraUrl && <img src={cedulaTraseraUrl} className="w-24 h-24 object-cover rounded-xl border-2 border-white shadow-sm" />}
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Subtítulo (Copete)</label>
-                        <textarea 
-                          rows={2}
-                          required
-                          value={subtitulo}
-                          onChange={(e) => setSubtitulo(e.target.value)}
-                          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none"
-                          placeholder="Breve resumen de la noticia..."
-                        ></textarea>
+
+                      <button 
+                        type="submit" 
+                        disabled={!selfieUrl || !cedulaFrontalUrl || !cedulaTraseraUrl || uploading}
+                        className="w-full bg-red-600 text-white py-4 rounded-xl font-bold hover:bg-black transition-all shadow-lg disabled:opacity-50"
+                      >
+                        Enviar para Revisión
+                      </button>
+                    </form>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'sponsorships' && (
+              <div className="max-w-4xl mx-auto space-y-8">
+                <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
+                  <h3 className="text-2xl font-serif font-black mb-6">Solicitar Nuevo Patrocinio</h3>
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    setLoading(true);
+                    try {
+                      await api.patrocinios.solicitar({
+                        marca: patrocinioMarca,
+                        ruc: patrocinioRUC,
+                        monto: Number(patrocinioMonto),
+                        comprobante: imagenUrl // Using image context for comprobante upload here
+                      });
+                      alert('Solicitud enviada. Debe ser aprobada por administración.');
+                      loadData();
+                      setPatrocinioMarca('');
+                      setPatrocinioRUC('');
+                      setPatrocinioMonto('');
+                      setImagenUrl('');
+                    } catch (err) {
+                      alert('Error al solicitar patrocinio');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <input 
+                        placeholder="Nombre de la Marca" 
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-bold"
+                        value={patrocinioMarca}
+                        onChange={(e) => setPatrocinioMarca(e.target.value)}
+                        required
+                      />
+                      <input 
+                        placeholder="RUC de la empresa" 
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-bold"
+                        value={patrocinioRUC}
+                        onChange={(e) => setPatrocinioRUC(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-4">
+                      <input 
+                        placeholder="Monto Acordado (Gs)" 
+                        type="number"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-bold"
+                        value={patrocinioMonto}
+                        onChange={(e) => setPatrocinioMonto(e.target.value)}
+                        required
+                      />
+                      <div className="flex items-center gap-4">
+                        <label className="flex-1 cursor-pointer bg-red-50 text-red-600 border-2 border-dashed border-red-200 rounded-xl p-3 text-center text-xs font-black uppercase hover:bg-red-100 transition-colors">
+                          <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'news')} />
+                          {uploading ? 'Subiendo...' : (imagenUrl ? 'Comprobante Listo' : 'Subir Comprobante de Transferencia')}
+                        </label>
                       </div>
                     </div>
+                    <button type="submit" className="md:col-span-2 bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-black transition-all">
+                      Registrar Solicitud
+                    </button>
+                  </form>
+                </div>
 
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Categoría</label>
-                      <select 
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="p-6 border-b border-gray-100">
+                    <h3 className="text-xl font-bold">Mis Solicitudes de Patrocinio</h3>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {misPatrocinios.length > 0 ? misPatrocinios.map((p) => (
+                      <div key={p.id} className="p-6 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-gray-900">{p.marca}</p>
+                          <p className="text-xs text-gray-500">Gs. {Number(p.monto).toLocaleString()} • {new Date(p.creado_en).toLocaleDateString()}</p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                          p.estado === 'aprobado' ? 'bg-green-100 text-green-700' :
+                          p.estado === 'rechazado' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {p.estado}
+                        </span>
+                      </div>
+                    )) : (
+                      <div className="p-8 text-center text-gray-400 italic">No tienes solicitudes registradas.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'pages' && (
+              <div className="max-w-4xl mx-auto space-y-8">
+                <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
+                  <h3 className="text-2xl font-serif font-black mb-6">{editingPageId ? 'Editar Página' : 'Añadir Nueva Página'}</h3>
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    setLoading(true);
+                    try {
+                      if (editingPageId) {
+                        await api.admin.updatePagina(editingPageId, { slug: pageSlug, titulo: pageTitle, contenido: pageContent, activa: pageActive });
+                      } else {
+                        await api.admin.createPagina({ slug: pageSlug, titulo: pageTitle, contenido: pageContent, activa: pageActive });
+                      }
+                      alert('Página guardada');
+                      loadData();
+                      setEditingPageId(null);
+                      setPageSlug('');
+                      setPageTitle('');
+                      setPageContent('');
+                    } catch (err) {
+                      alert('Error al guardar página');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <input 
+                        placeholder="Título de la página (Ej: Sobre Nosotros)" 
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-bold"
+                        value={pageTitle}
+                        onChange={(e) => setPageTitle(e.target.value)}
                         required
+                      />
+                      <input 
+                        placeholder="Slug (Ej: sobre-nosotros)" 
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-mono text-sm"
+                        value={pageSlug}
+                        onChange={(e) => setPageSlug(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="min-h-[300px] border border-gray-200 rounded-xl overflow-hidden">
+                      <ReactQuill theme="snow" value={pageContent} onChange={setPageContent} className="h-[250px]" />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={pageActive} onChange={(e) => setPageActive(e.target.checked)} className="w-4 h-4 rounded text-red-600" />
+                        <span className="text-sm font-bold text-gray-700">Página Activa</span>
+                      </label>
+                      <div className="flex gap-4">
+                        {editingPageId && <button type="button" onClick={() => setEditingPageId(null)} className="text-gray-500 font-bold">Cancelar</button>}
+                        <button type="submit" className="bg-red-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-black transition-all">
+                          {editingPageId ? 'Actualizar Página' : 'Publicar Página'}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="p-6 border-b border-gray-100">
+                    <h3 className="text-xl font-bold">Gestión de Páginas Estáticas</h3>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {adminPages.length > 0 ? adminPages.map((p) => (
+                      <div key={p.id} className="p-6 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-gray-900">{p.titulo}</p>
+                          <p className="text-xs text-gray-500">/{p.slug} • Actualizada el {new Date(p.actualizado_en).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => {
+                              setEditingPageId(p.id);
+                              setPageTitle(p.titulo);
+                              setPageSlug(p.slug);
+                              setPageContent(p.contenido);
+                              setPageActive(!!p.activa);
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <Edit className="w-5 h-5" />
+                          </button>
+                          <button 
+                            onClick={async () => {
+                              if(confirm('¿Seguro?')) {
+                                await api.admin.deletePagina(p.id);
+                                loadData();
+                              }
+                            }}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="p-12 text-center text-gray-400 italic">No hay páginas creadas.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'create' && (
+              <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-xl max-w-4xl mx-auto">
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="p-3 bg-red-50 text-red-600 rounded-2xl">
+                    <FileText className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-serif font-black text-gray-900">{editingId ? 'Editar Noticia' : 'Nueva Noticia'}</h2>
+                    <p className="text-gray-500">Crea contenido de alto impacto para tu audiencia.</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleNewsSubmit} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-black text-gray-400 uppercase tracking-widest">Título Impactante</label>
+                      <input 
+                        className="w-full bg-gray-50 border-0 rounded-xl p-4 text-lg font-serif focus:ring-2 focus:ring-red-500 transition-all font-bold"
+                        placeholder="Ej: El futuro del periodismo en Paraguay..."
+                        value={titulo}
+                        onChange={(e) => setTitulo(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-black text-gray-400 uppercase tracking-widest">Categoría</label>
+                      <select 
+                        className="w-full bg-gray-50 border-0 rounded-xl p-4 focus:ring-2 focus:ring-red-500 transition-all font-bold appearance-none"
                         value={categoriaId}
                         onChange={(e) => setCategoriaId(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none appearance-none"
+                        required
                       >
-                        <option value="">Seleccionar...</option>
-                        {Array.isArray(categorias) && categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                        <option value="">Seleccionar categoría</option>
+                        {categorias.filter(c => c.activa).map(cat => (
+                          <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                        ))}
                       </select>
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Imagen destacada</label>
-                      <div className="flex items-center gap-4">
-                        <label className="flex-1 cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-3 flex flex-col items-center justify-center hover:border-red-400 transition-colors">
-                          <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'news')} />
-                          <div className="flex items-center gap-2 text-gray-500">
-                            <ImageIcon className="w-5 h-5" />
-                            <span className="text-sm font-medium">{uploading ? 'Procesando...' : 'Subir Imagen'}</span>
-                          </div>
-                        </label>
-                        {imagenUrl && (
-                          <div className="w-16 h-16 rounded-xl overflow-hidden border border-gray-200 relative group">
-                            <img src={imagenUrl} alt="Vista previa" className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer" onClick={() => setImagenUrl('')}>
-                              <XCircle className="w-5 h-5 text-white" />
-                            </div>
-                          </div>
-                        )}
+                  <div className="space-y-2">
+                    <label className="text-sm font-black text-gray-400 uppercase tracking-widest">Subtítulo o Resumen</label>
+                    <textarea 
+                      className="w-full bg-gray-50 border-0 rounded-xl p-4 h-20 focus:ring-2 focus:ring-red-500 transition-all text-gray-600 font-medium"
+                      placeholder="Una breve descripción que invite a leer..."
+                      value={subtitulo}
+                      onChange={(e) => setSubtitulo(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-black text-gray-400 uppercase tracking-widest">Imagen Principal (Fija al inicio)</label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <ImageIcon className="h-5 w-5 text-gray-400" />
                       </div>
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Cuerpo de la noticia</label>
-                      <textarea 
-                        rows={12}
+                      <input 
+                        className="w-full bg-gray-50 border-0 rounded-xl pl-12 pr-4 py-4 text-sm font-bold focus:ring-2 focus:ring-red-500 transition-all"
+                        placeholder="URL de la imagen o subir abajo..."
+                        value={imagenUrl}
+                        onChange={(e) => setImagenUrl(e.target.value)}
                         required
-                        value={contenido}
-                        onChange={(e) => setContenido(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none font-sans"
-                        placeholder="Escribe aquí el contenido completo..."
-                      ></textarea>
+                      />
                     </div>
-
-                    <div className="md:col-span-2 space-y-4 pt-4 border-t border-gray-100">
-                      <div className="flex items-center gap-3">
-                        <input 
-                          type="checkbox" 
-                          id="patrocinada"
-                          checked={patrocinada}
-                          onChange={(e) => setPatrocinada(e.target.checked)}
-                          className="w-5 h-5 rounded text-red-600 focus:ring-red-500"
-                        />
-                        <label htmlFor="patrocinada" className="font-bold text-gray-900 cursor-pointer">Activar Patrocinio (Publicidad)</label>
-                      </div>
-
-                      {patrocinada && (
-                        <motion.div 
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-red-50/50 p-6 rounded-2xl border border-red-100"
-                        >
-                          <div>
-                            <label className="block text-xs font-black text-red-800 uppercase mb-2">Monto (Gs)</label>
-                            <input 
-                              type="number"
-                              required={patrocinada}
-                              value={patrocinioMonto}
-                              onChange={(e) => setPatrocinioMonto(e.target.value)}
-                              className="w-full px-4 py-2 bg-white border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
-                              placeholder="Ej: 500000"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-black text-red-800 uppercase mb-2">Marca Patrocinadora</label>
-                            <input 
-                              type="text"
-                              required={patrocinada}
-                              value={patrocinioMarca}
-                              onChange={(e) => setPatrocinioMarca(e.target.value)}
-                              className="w-full px-4 py-2 bg-white border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
-                              placeholder="Ej: Coca Cola"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-black text-red-800 uppercase mb-2">RUC de la empresa</label>
-                            <input 
-                              type="text"
-                              required={patrocinada}
-                              value={patrocinioRUC}
-                              onChange={(e) => setPatrocinioRUC(e.target.value)}
-                              className="w-full px-4 py-2 bg-white border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
-                              placeholder="Ej: 80012345-6"
-                            />
-                          </div>
-                        </motion.div>
+                    <div className="flex items-center gap-4 mt-2">
+                      <label className="cursor-pointer bg-red-50 border-2 border-dashed border-red-200 hover:border-red-500 transition-all rounded-xl px-6 py-4 flex-1 flex flex-col items-center gap-2 group">
+                        <Plus className="w-6 h-6 text-red-400 group-hover:text-red-500" />
+                        <span className="text-xs font-black text-red-500 uppercase tracking-tighter">Subir Imagen Principal</span>
+                        <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'news')} accept="image/*" />
+                      </label>
+                      {imagenUrl && (
+                        <div className="w-24 h-24 rounded-xl overflow-hidden shadow-sm border-2 border-white relative group">
+                          <img src={imagenUrl} alt="Preview" className="w-full h-full object-cover" />
+                          <button type="button" onClick={() => setImagenUrl('')} className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Trash2 className="w-6 h-6 text-white" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
 
-                  <button 
-                    type="submit" 
-                    disabled={uploading}
-                    className="w-full bg-red-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-700 transition-all shadow-lg disabled:opacity-50"
-                  >
-                    <Send className="w-5 h-5" /> {editingId ? 'Actualizar Noticia' : 'Publicar Noticia'}
-                  </button>
-                  
-                  {editingId && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-black text-gray-400 uppercase tracking-widest">Cuerpo de la Noticia</label>
+                    <div className="bg-gray-50 rounded-xl border border-gray-100 min-h-[400px]">
+                      <ReactQuill 
+                        theme="snow" 
+                        value={contenido} 
+                        onChange={setContenido}
+                        placeholder="Escribe tu contenido aquí... El autor puede añadir más imágenes y dar formato al texto de manera visual."
+                        modules={{
+                          toolbar: [
+                            [{ 'header': [1, 2, 3, false] }],
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{'list': 'ordered'}, {'list': 'bullet'}],
+                            ['link', 'image'],
+                            ['clean']
+                          ],
+                        }}
+                        className="h-[340px]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-blue-50 rounded-2xl border border-blue-200">
+                    <label className="flex items-center gap-3 font-bold text-blue-900 mb-4">
+                      <Activity className="w-5 h-5" /> Asociar Patrocinio Aprobado
+                    </label>
+                    
+                    {misPatrocinios.filter(p => p.estado === 'aprobado').length > 0 ? (
+                      <select 
+                        className="w-full bg-white border border-blue-100 rounded-xl p-3 text-sm font-bold"
+                        value={selectedPatrocinioId || ''}
+                        onChange={(e) => setSelectedPatrocinioId(e.target.value || null)}
+                      >
+                        <option value="">Ninguno - Contenido estándar</option>
+                        {misPatrocinios.filter(p => p.estado === 'aprobado').map(p => (
+                          <option key={p.id} value={p.id}>{p.marca} (Gs. {p.monto.toLocaleString()})</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="text-xs text-blue-600 italic">No tienes patrocinios aprobados vinculados a tu cuenta. Los patrocinios deben aprobarse antes de poder ser vinculados a una noticia.</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-6 pt-6">
                     <button 
                       type="button" 
-                      onClick={() => { setEditingId(null); setActiveTab('manage'); }}
-                      className="w-full text-gray-500 mt-2 hover:text-gray-900 font-medium"
+                      onClick={() => setActiveTab('manage')}
+                      className="text-gray-500 font-bold hover:text-red-600"
                     >
-                      Cancelar Edición
+                      Descartar
                     </button>
-                  )}
+                    <button 
+                      type="submit" 
+                      disabled={uploading}
+                      className="bg-red-600 text-white px-12 py-4 rounded-xl font-black text-lg hover:bg-black transition-all shadow-lg flex items-center gap-3"
+                    >
+                      {uploading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                      {editingId ? 'Guardar Cambios' : 'Publicar Noticia'}
+                    </button>
+                  </div>
                 </form>
               </div>
             )}
@@ -1322,6 +1648,63 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
             {activeTab === 'admin' && user.rol === 'admin' && (
           <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Panel de Verificaciones de Identidad */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden">
+              <div className="p-6 border-b border-gray-100 bg-red-50/30">
+                <h3 className="text-xl font-black flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-red-600" /> Verificaciones de Identidad
+                </h3>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {adminVerificaciones.length > 0 ? adminVerificaciones.map(v => (
+                  <div key={v.id} className="p-8 space-y-6">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-black text-lg text-gray-900">{v.nombre}</p>
+                        <p className="text-sm text-gray-500 font-bold">{v.email}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={async () => {
+                            await api.admin.handleVerificacion(v.id, 'aprobar');
+                            loadData();
+                          }}
+                          className="bg-green-600 text-white px-4 py-2 rounded-lg font-black text-xs hover:bg-green-700 transition-all"
+                        >
+                          Aprobar Identidad
+                        </button>
+                        <button 
+                          onClick={async () => {
+                            await api.admin.handleVerificacion(v.id, 'rechazar');
+                            loadData();
+                          }}
+                          className="bg-gray-200 text-gray-600 px-4 py-2 rounded-lg font-black text-xs hover:bg-gray-300 transition-all"
+                        >
+                          Rechazar
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Selfie</p>
+                        <img src={v.selfie} className="w-full h-48 object-cover rounded-2xl border-2 border-gray-100 shadow-sm cursor-zoom-in" onClick={() => window.open(v.selfie, '_blank')} />
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ID Frontal</p>
+                        <img src={v.cedula_frontal} className="w-full h-48 object-cover rounded-2xl border-2 border-gray-100 shadow-sm cursor-zoom-in" onClick={() => window.open(v.cedula_frontal, '_blank')} />
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ID Trasero</p>
+                        <img src={v.cedula_trasera} className="w-full h-48 object-cover rounded-2xl border-2 border-gray-100 shadow-sm cursor-zoom-in" onClick={() => window.open(v.cedula_trasera, '_blank')} />
+                      </div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="p-12 text-center text-gray-400 italic font-bold">No hay verificaciones de identidad pendientes.</div>
+                )}
+              </div>
+            </div>
+
             {/* Centro de Mensajería */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                <div className="p-6 border-b border-gray-100 bg-gray-50/50">

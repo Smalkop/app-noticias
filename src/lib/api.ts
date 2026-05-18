@@ -161,6 +161,38 @@ export const api = {
       }) as any,
     migrarDB: (): Promise<any> => fetchWithAuth('/api/admin/migrar-db') as any,
     triggerSendPulse: (): Promise<any> => fetchWithAuth('/api/admin/trigger-sendpulse', { method: 'POST' }) as any,
+    handleVerificacion: (id: string, accion: 'aprobar' | 'rechazar'): Promise<any> =>
+      fetchWithAuth(`/api/admin/verificaciones/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion })
+      }) as any,
+    listVerificaciones: (): Promise<any[]> => fetchWithAuth('/api/admin/verificaciones') as any,
+    listPaginas: (): Promise<any[]> => fetchWithAuth('/api/admin/paginas') as any,
+    createPagina: (data: any): Promise<any> =>
+      fetchWithAuth('/api/admin/paginas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }) as any,
+    updatePagina: (id: string, data: any): Promise<any> =>
+      fetchWithAuth(`/api/admin/paginas/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }) as any,
+    deletePagina: (id: string): Promise<any> =>
+      fetchWithAuth(`/api/admin/paginas/${id}`, { method: 'DELETE' }) as any,
+  },
+  
+  patrocinios: {
+    solicitar: (data: any): Promise<any> =>
+      fetchWithAuth('/api/patrocinios/solicitar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }) as any,
+    misPatrocinios: (): Promise<any[]> => fetchWithAuth('/api/patrocinios/mis-patrocinios') as any,
   },
   
   seguidores: {

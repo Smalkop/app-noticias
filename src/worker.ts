@@ -428,16 +428,25 @@ app.put('/api/auth/perfil', async (c) => {
   try {
     const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
     const payload = await verify(token, secret, 'HS256') as any;
-    const { nombre, bio, foto_perfil, telefono } = await c.req.json();
+    const { nombre, bio, foto_perfil, telefono, selfie, cedula_frontal, cedula_trasera } = await c.req.json();
 
     await c.env.DB.prepare(`
       UPDATE usuarios 
       SET nombre = ?, 
           bio = ?, 
           foto_perfil = ?,
-          telefono = ?
+          telefono = ?,
+          selfie = COALESCE(?, selfie),
+          cedula_frontal = COALESCE(?, cedula_frontal),
+          cedula_trasera = COALESCE(?, cedula_trasera),
+          estado_verificacion = CASE WHEN ? IS NOT NULL THEN 'pendiente' ELSE estado_verificacion END
       WHERE id = ?
-    `).bind(nombre, bio, foto_perfil, telefono, payload.id).run();
+    `).bind(
+      nombre, bio, foto_perfil, telefono, 
+      selfie || null, cedula_frontal || null, cedula_trasera || null,
+      selfie || cedula_frontal ? 'si' : null,
+      payload.id
+    ).run();
 
     // Sync with SendPulse
     const user: any = await c.env.DB.prepare('SELECT email, nombre, telefono FROM usuarios WHERE id = ?').bind(payload.id).first();
@@ -650,6 +659,107 @@ app.post('/api/noticias/:id/compartir', async (c) => {
     'INSERT INTO noticia_shares (noticia_id, plataforma) VALUES (?, ?)'
   ).bind(noticiaId, plataforma).run();
   return c.json({ success: true });
+});
+
+// Paginas: List (Public)
+app.get('/api/paginas', async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT id, slug, titulo FROM paginas WHERE activa = 1').all();
+  return c.json(results || []);
+});
+
+// Paginas: Get
+app.get('/api/paginas/:slug', async (c) => {
+  const slug = c.req.param('slug');
+  const pagina = await c.env.DB.prepare('SELECT * FROM paginas WHERE slug = ? AND activa = 1').bind(slug).first();
+  if (!pagina) return c.json({ error: 'Página no encontrada' }, 404);
+  return c.json(pagina);
+});
+
+// Admin: Paginas CRUD
+app.get('/api/admin/paginas', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+  const payload = await verify(token, secret, 'HS256') as any;
+  if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+  const { results } = await c.env.DB.prepare('SELECT * FROM paginas').all();
+  return c.json(results || []);
+});
+
+app.post('/api/admin/paginas', async (c) => {
+  const { slug, titulo, contenido, activa } = await c.req.json();
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare('INSERT INTO paginas (id, slug, titulo, contenido, activa) VALUES (?, ?, ?, ?, ?)')
+    .bind(id, slug, titulo, contenido, activa ? 1 : 0).run();
+  return c.json({ id });
+});
+
+app.put('/api/admin/paginas/:id', async (c) => {
+  const id = c.req.param('id');
+  const { slug, titulo, contenido, activa } = await c.req.json();
+  await c.env.DB.prepare('UPDATE paginas SET slug = ?, titulo = ?, contenido = ?, activa = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?')
+    .bind(slug, titulo, contenido, activa ? 1 : 0, id).run();
+  return c.json({ success: true });
+});
+
+app.delete('/api/admin/paginas/:id', async (c) => {
+  const id = c.req.param('id');
+  await c.env.DB.prepare('DELETE FROM paginas WHERE id = ?').bind(id).run();
+  return c.json({ success: true });
+});
+
+// Admin: Verificaciones
+app.get('/api/admin/verificaciones', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+  const payload = await verify(token, secret, 'HS256') as any;
+  if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+  const { results } = await c.env.DB.prepare('SELECT id, nombre, email, selfie, cedula_frontal, cedula_trasera, estado_verificacion FROM usuarios WHERE estado_verificacion = "pendiente"').all();
+  return c.json(results || []);
+});
+
+app.post('/api/admin/verificaciones/:id', async (c) => {
+  const id = c.req.param('id');
+  const { accion } = await c.req.json(); // aprobar, rechazar
+  const estado = accion === 'aprobar' ? 'aprobado' : 'rechazado';
+  
+  await c.env.DB.prepare('UPDATE usuarios SET estado_verificacion = ? WHERE id = ?').bind(estado, id).run();
+  
+  if (accion === 'aprobar') {
+    await c.env.DB.prepare('UPDATE usuarios SET verificado = 1 WHERE id = ?').bind(id).run();
+  }
+  
+  return c.json({ success: true });
+});
+
+// Patrocinios: My Requests
+app.get('/api/patrocinios/mis-solicitudes', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+  const payload = await verify(token, secret, 'HS256') as any;
+  
+  const { results } = await c.env.DB.prepare('SELECT * FROM patrocinios WHERE autor_id = ?').bind(payload.id).all();
+  return c.json(results || []);
+});
+
+// Patrocinios: Request
+app.post('/api/patrocinios/solicitar', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+  const payload = await verify(token, secret, 'HS256') as any;
+  
+  const { marca, ruc, monto, comprobante } = await c.req.json();
+  const id = crypto.randomUUID();
+  
+  await c.env.DB.prepare('INSERT INTO patrocinios (id, autor_id, marca, ruc, monto, comprobante, estado) VALUES (?, ?, ?, ?, ?, ?, "pendiente")')
+    .bind(id, payload.id, marca, ruc, monto, comprobante).run();
+    
+  return c.json({ id });
 });
 
 // Notificaciones: List
@@ -905,21 +1015,31 @@ app.get('/api/setup-db', async (c) => {
         bio TEXT,
         verificado INTEGER DEFAULT 0,
         telefono TEXT,
+        selfie TEXT,
+        cedula_frontal TEXT,
+        cedula_trasera TEXT,
+        estado_verificacion TEXT DEFAULT 'ninguno', -- ninguno, pendiente, aprobado, rechazado
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
       )`),
-      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS solicitudes_autor (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        usuario_id TEXT UNIQUE NOT NULL,
-        motivo TEXT,
-        estado TEXT DEFAULT 'pendiente',
-        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
-      )`),
-      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS categorias (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT NOT NULL,
+      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS paginas (
+        id TEXT PRIMARY KEY,
         slug TEXT UNIQUE NOT NULL,
-        activa INTEGER DEFAULT 1
+        titulo TEXT NOT NULL,
+        contenido TEXT NOT NULL,
+        activa INTEGER DEFAULT 1,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`),
+      c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS patrocinios (
+        id TEXT PRIMARY KEY,
+        autor_id TEXT NOT NULL,
+        marca TEXT NOT NULL,
+        ruc TEXT,
+        monto REAL NOT NULL,
+        comprobante TEXT,
+        estado TEXT DEFAULT 'pendiente', -- pendiente, aprobado, rechazado
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (autor_id) REFERENCES usuarios(id)
       )`),
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS noticias (
         id TEXT PRIMARY KEY,
@@ -936,13 +1056,10 @@ app.get('/api/setup-db', async (c) => {
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         patrocinada INTEGER DEFAULT 0,
-        patrocinio_monto REAL,
-        patrocinio_marca TEXT,
-        patrocinio_ruc TEXT,
-        patrocinio_estado TEXT DEFAULT 'pendiente',
-        patrocinio_comprobante TEXT,
+        patrocinio_id TEXT, -- Relación con la tabla patrocinios
         FOREIGN KEY (autor_id) REFERENCES usuarios(id) ON DELETE CASCADE,
-        FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE
+        FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE,
+        FOREIGN KEY (patrocinio_id) REFERENCES patrocinios(id) ON DELETE SET NULL
       )`),
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS metricas_visitas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2247,7 +2364,13 @@ app.get('/api/noticias/:id', async (c) => {
 
   try {
     const noticia: any = await c.env.DB.prepare(
-      'SELECT n.*, u.nombre as autor_nombre, u.bio as autor_bio, c.nombre as categoria_nombre, c.slug as categoria_slug FROM noticias n JOIN usuarios u ON n.autor_id = u.id JOIN categorias c ON n.categoria_id = c.id WHERE n.id = ?'
+      `SELECT n.*, u.nombre as autor_nombre, u.bio as autor_bio, c.nombre as categoria_nombre, c.slug as categoria_slug,
+       p.marca as patrocinio_marca, p.ruc as patrocinio_ruc, p.monto as patrocinio_monto
+       FROM noticias n 
+       JOIN usuarios u ON n.autor_id = u.id 
+       JOIN categorias c ON n.categoria_id = c.id 
+       LEFT JOIN patrocinios p ON n.patrocinio_id = p.id
+       WHERE n.id = ?`
     ).bind(id).first();
 
     if (noticia) {
@@ -2466,10 +2589,45 @@ app.all('*', async (c) => {
   
   // Para SPA, si no es una ruta de API, servir index.html
   try {
+    const url = new URL(c.req.url);
     const indexResponse = await c.env.ASSETS.fetch(new Request(new URL('/index.html', c.req.url)));
-    if (indexResponse.ok) {
-      return indexResponse;
+    if (!indexResponse.ok) return indexResponse;
+
+    let html = await indexResponse.text();
+    
+    // Inyección de Open Graph para Noticias
+    const match = url.pathname.match(/^\/noticia\/([a-zA-Z0-9-]+)$/);
+    if (match) {
+      const newsId = match[1];
+      const noticia: any = await c.env.DB.prepare('SELECT titulo, subtitulo, imagen_destacada FROM noticias WHERE id = ?').bind(newsId).first();
+      
+      if (noticia) {
+        const title = `${noticia.titulo} | Lapacho Post`;
+        const description = noticia.subtitulo || noticia.titulo;
+        const baseUrl = `${url.protocol}//${url.host}`;
+        const image = noticia.imagen_destacada ? (noticia.imagen_destacada.startsWith('http') ? noticia.imagen_destacada : `${baseUrl}${noticia.imagen_destacada}`) : `${baseUrl}/og-default.png`;
+        
+        const ogTags = `
+  <title>${title}</title>
+  <meta name="description" content="${description}">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${description}">
+  <meta property="og:image" content="${image}">
+  <meta property="og:url" content="${url.href}">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${title}">
+  <meta name="twitter:description" content="${description}">
+  <meta name="twitter:image" content="${image}">
+`;
+        // Intentar inyectar antes del cierre de head
+        html = html.replace('</head>', `${ogTags}</head>`);
+      }
     }
+    
+    return new Response(html, {
+      headers: { 'Content-Type': 'text/html' }
+    });
   } catch (err) {
     console.error('Error fetching index.html:', err);
   }

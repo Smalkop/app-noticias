@@ -8,6 +8,7 @@ import Article from './pages/Article';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import PageDetail from './pages/PageDetail';
 
 function Footer() {
   return (
@@ -26,19 +27,19 @@ function Footer() {
           <div>
             <h4 className="font-bold text-lg mb-6">Secciones</h4>
             <ul className="space-y-4 text-gray-400 text-sm">
-              <li><a href="#" className="hover:text-white transition-colors">Política</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Economía</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Deportes</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Cultura</a></li>
+              <li><a href="/" className="hover:text-white transition-colors">Portada</a></li>
+              <li><a href="#" className="hover:text-white transition-colors">Paraguay</a></li>
+              <li><a href="#" className="hover:text-white transition-colors">Mundo</a></li>
+              <li><a href="#" className="hover:text-white transition-colors">Ciencia</a></li>
             </ul>
           </div>
           <div>
             <h4 className="font-bold text-lg mb-6">Institucional</h4>
             <ul className="space-y-4 text-gray-400 text-sm">
-              <li><a href="#" className="hover:text-white transition-colors">Sobre nosotros</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Código de ética</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Publicidad</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Contacto</a></li>
+              <li><a href="/p/sobre-nosotros" className="hover:text-white transition-colors">Sobre nosotros</a></li>
+              <li><a href="/p/codigo-de-etica" className="hover:text-white transition-colors">Código de ética</a></li>
+              <li><a href="/p/publicidad" className="hover:text-white transition-colors">Publicidad</a></li>
+              <li><a href="/p/contacto" className="hover:text-white transition-colors">Contacto</a></li>
             </ul>
           </div>
         </div>
@@ -106,6 +107,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/noticia/:id" element={<Article user={user} />} />
+            <Route path="/p/:slug" element={<PageDetail />} />
             <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login onLogin={setUser} />} />
             <Route path="/registro" element={user ? <Navigate to="/dashboard" /> : <Register />} />
             <Route path="/dashboard" element={user ? <Dashboard user={user} onUserUpdate={setUser} /> : <Navigate to="/login" />} />

@@ -7,6 +7,11 @@ export interface User {
   bio?: string;
   verificado: number;
   telefono?: string;
+  // Verification
+  estado_verificacion?: 'ninguno' | 'pendiente' | 'aprobado' | 'rechazado';
+  selfie?: string;
+  cedula_frontal?: string;
+  cedula_trasera?: string;
 }
 
 export interface Categoria {
@@ -35,12 +40,10 @@ export interface Noticia {
   creado_en: string;
   actualizado_en: string;
   // Sponsorship
-  patrocinada: number;
-  patrocinio_monto?: number;
+  patrocinio_id?: string;
   patrocinio_marca?: string;
   patrocinio_ruc?: string;
-  patrocinio_estado?: 'pendiente' | 'en revision' | 'aceptado' | 'rechazado' | 'envie otra';
-  patrocinio_comprobante?: string;
+  patrocinio_monto?: number;
   // Dynamic stats
   reacciones?: { [key: string]: number };
   mi_reaccion?: string;
