@@ -18,8 +18,8 @@ import { Seguidor, Notificacion } from '../types';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -1701,6 +1701,64 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                   </div>
                 )) : (
                   <div className="p-12 text-center text-gray-400 italic font-bold">No hay verificaciones de identidad pendientes.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Gestión de Patrocinios */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden mt-8">
+              <div className="p-6 border-b border-gray-100 bg-amber-50/30">
+                <h3 className="text-xl font-black flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-amber-600" /> Solicitudes de Patrocinio (Marketing)
+                </h3>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {adminPatrocinios.length > 0 ? adminPatrocinios.map(p => (
+                  <div key={p.id} className="p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-black bg-amber-100 text-amber-700 px-2 py-0.5 rounded uppercase tracking-wider">Pendiente de Aprobación</span>
+                        <p className="text-xs text-gray-400 font-bold">Solicitado por {p.autor_nombre || 'Autor'}</p>
+                      </div>
+                      <h4 className="text-2xl font-serif font-black text-gray-900 leading-tight">{p.marca}</h4>
+                      <div className="flex gap-4 mt-2">
+                        <p className="text-sm font-bold text-gray-500">Monto: <span className="text-gray-900">Gs. {Number(p.monto).toLocaleString()}</span></p>
+                        <p className="text-sm font-bold text-gray-500">RUC: <span className="text-gray-900">{p.ruc}</span></p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-3 min-w-[200px]">
+                      {p.comprobante && (
+                        <button 
+                          onClick={() => window.open(p.comprobante, '_blank')}
+                          className="text-xs font-black text-amber-600 hover:underline flex items-center gap-1"
+                        >
+                          <ImageIcon className="w-3 h-3" /> Ver Comprobante de Pago
+                        </button>
+                      )}
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={async () => {
+                            await api.admin.handlePatrocinio(p.id, 'aprobado');
+                            loadData();
+                          }}
+                          className="flex-1 bg-green-600 text-white font-black py-2 rounded-lg text-xs hover:bg-green-700 transition-all shadow-md"
+                        >
+                          Aprobar
+                        </button>
+                        <button 
+                          onClick={async () => {
+                            await api.admin.handlePatrocinio(p.id, 'rechazado');
+                            loadData();
+                          }}
+                          className="flex-1 bg-gray-200 text-gray-600 font-black py-2 rounded-lg text-xs hover:bg-gray-300 transition-all"
+                        >
+                          Rechazar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="p-12 text-center text-gray-400 italic font-bold">No hay patrocinios pendientes de revisión comercial.</div>
                 )}
               </div>
             </div>
