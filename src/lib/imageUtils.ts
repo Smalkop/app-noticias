@@ -47,7 +47,7 @@ export async function compressImage(
 
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Exportar a WebP para mejor compresión, fallback a JPEG
+        // Exportar a PNG (lossless por defecto en canvas, pero ya redimensionado)
         canvas.toBlob(
           (blob) => {
             if (blob) {
@@ -56,8 +56,7 @@ export async function compressImage(
               reject(new Error('Error al comprimir la imagen'));
             }
           },
-          'image/webp',
-          quality
+          'image/png'
         );
       };
       img.onerror = (err) => reject(err);

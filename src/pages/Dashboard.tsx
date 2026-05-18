@@ -171,8 +171,9 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
         0.8
       );
       
-      // Convertir Blob a File para el upload
-      const compressedFile = new File([compressedBlob], file.name, { type: 'image/webp' });
+      // Convertir Blob a File para el upload (Forzando PNG)
+      const fileName = file.name.split('.').slice(0, -1).join('.') || 'upload';
+      const compressedFile = new File([compressedBlob], `${fileName}.png`, { type: 'image/png' });
       
       const { url } = await api.upload(compressedFile);
       if (type === 'news') {
@@ -724,7 +725,15 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                                   if (!file) return;
                                   setUploading(true);
                                   try {
-                                    const { url } = await api.upload(file);
+                                    let fileToUpload = file;
+                                    // Si es imagen, comprimir y convertir a PNG
+                                    if (file.type.startsWith('image/')) {
+                                      const compressedBlob = await compressImage(file, 1600, 1600, 0.8);
+                                      const fileName = file.name.split('.').slice(0, -1).join('.') || 'comprobante';
+                                      fileToUpload = new File([compressedBlob], `${fileName}.png`, { type: 'image/png' });
+                                    }
+                                    
+                                    const { url } = await api.upload(fileToUpload);
                                     await api.noticias.subirComprobante(n.id, url);
                                     setSuccess('Comprobante enviado para revisión');
                                     loadData();
