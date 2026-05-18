@@ -82,6 +82,26 @@ async function deleteFromR2(c: any, url: string | null | undefined) {
   }
 }
 
+// Helper to notify user with fallback for missing titulo column
+async function notifyUser(c: any, userId: string, titulo: string, mensaje: string, tipo: string = 'info') {
+  try {
+    await c.env.DB.prepare(`
+      INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, leida)
+      VALUES (?, ?, ?, ?, 0)
+    `).bind(userId, titulo, mensaje, tipo).run();
+  } catch (err: any) {
+    if (err.message && err.message.includes('no such column: titulo')) {
+      console.log('Fallback notification: Missing titulo column');
+      await c.env.DB.prepare(`
+        INSERT INTO notificaciones (usuario_id, mensaje, tipo, leida)
+        VALUES (?, ?, ?, 0)
+      `).bind(userId, `[${titulo}] ${mensaje}`, tipo).run();
+    } else {
+      console.error('Notification Error:', err);
+    }
+  }
+}
+
 // Password validation helper
 function isPasswordSafe(password: string): boolean {
   // Min 8 characters, upper, lower, number, special char
@@ -758,6 +778,12 @@ app.get('/api/admin/verificaciones', async (c) => {
 });
 
 app.post('/api/admin/verificaciones/:id', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+  const payload = await verify(token, secret, 'HS256') as any;
+  if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
   const id = c.req.param('id');
   const { accion } = await c.req.json(); // aprobar, rechazar
   const estado = accion === 'aprobar' ? 'aprobado' : 'rechazado';
@@ -768,16 +794,10 @@ app.post('/api/admin/verificaciones/:id', async (c) => {
     await c.env.DB.prepare('UPDATE usuarios SET verificado = 1 WHERE id = ?').bind(id).run();
     
     // Notify user
-    await c.env.DB.prepare(`
-      INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, leida)
-      VALUES (?, '¡Identidad Verificada!', 'Tu proceso de verificación ha sido aprobado con éxito.', 'verificacion', 0)
-    `).bind(id).run();
+    await notifyUser(c, id, '¡Identidad Verificada!', 'Tu proceso de verificación ha sido aprobado con éxito.', 'verificacion');
   } else {
     // Notify user of rejection
-    await c.env.DB.prepare(`
-      INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, leida)
-      VALUES (?, 'Verificación Rechazada', 'Tu solicitud de verificación ha sido rechazada. Por favor, sube documentos legibles si deseas intentarlo nuevamente.', 'sistema', 0)
-    `).bind(id).run();
+    await notifyUser(c, id, 'Verificación Rechazada', 'Tu solicitud de verificación ha sido rechazada. Por favor, sube documentos legibles si deseas intentarlo nuevamente.', 'sistema');
   }
   
   return c.json({ success: true });
@@ -796,10 +816,7 @@ app.post('/api/admin/usuarios/:id/pedir-verificacion', async (c) => {
   // Set status to rejected or none so user can see the option again
   await c.env.DB.prepare('UPDATE usuarios SET estado_verificacion = "ninguno" WHERE id = ?').bind(id).run();
   
-  await c.env.DB.prepare(`
-    INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, leida)
-    VALUES (?, 'Nueva Verificación Requerida', 'El administrador ha solicitado que vuelvas a subir tus documentos de identidad.', 'sistema', 0)
-  `).bind(id).run();
+  await notifyUser(c, id, 'Nueva Verificación Requerida', 'El administrador ha solicitado que vuelvas a subir tus documentos de identidad.', 'sistema');
 
   return c.json({ success: true });
 });
@@ -833,15 +850,26 @@ app.post('/api/patrocinios/solicitar', async (c) => {
       return c.json({ error: 'Token inválido o expirado' }, 401);
     }
     
-    const { marca, ruc, monto, comprobante } = await c.req.json();
-    if (!marca || !monto) {
+    const body = await c.req.json();
+    console.log('Sponsorship Request Body:', JSON.stringify(body));
+    const { marca, ruc, monto, comprobante } = body;
+    
+    if (!marca || monto === undefined || monto === null) {
       return c.json({ error: 'Marca y monto son obligatorios' }, 400);
     }
 
     const id = crypto.randomUUID();
     
-    await c.env.DB.prepare('INSERT INTO patrocinios (id, autor_id, marca, ruc, monto, comprobante, estado) VALUES (?, ?, ?, ?, ?, ?, "pendiente")')
-      .bind(id, payload.id, marca, ruc, Number(monto), comprobante).run();
+    try {
+      await c.env.DB.prepare('INSERT INTO patrocinios (id, autor_id, marca, ruc, monto, comprobante, estado) VALUES (?, ?, ?, ?, ?, ?, "pendiente")')
+        .bind(id, payload.id, marca, ruc, Number(monto), comprobante).run();
+    } catch (dbErr: any) {
+      console.error('Database Error in Sponsor Request:', dbErr.message);
+      if (dbErr.message.includes('no such table')) {
+        return c.json({ error: 'La base de datos requiere migración. Por favor, contacta al administrador.' }, 500);
+      }
+      throw dbErr;
+    }
       
     return c.json({ id });
   } catch (err: any) {
@@ -939,10 +967,7 @@ app.post('/api/webhook/sendpulse', async (c) => {
           
           const user: any = await c.env.DB.prepare('SELECT id FROM usuarios WHERE LOWER(email) = LOWER(?)').bind(email).first();
           if (user) {
-            await c.env.DB.prepare(`
-              INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, leida)
-              VALUES (?, '¡Cuenta Verificada!', 'Tu correo electrónico ha sido verificado con éxito.', 'sistema', 0)
-            `).bind(user.id).run();
+            await notifyUser(c, user.id, '¡Cuenta Verificada!', 'Tu correo electrónico ha sido verificado con éxito.', 'sistema');
           }
         } else {
           console.log(`Webhook no encontró usuario para: ${email} (o ya estaba verificado)`);
@@ -1190,6 +1215,7 @@ app.get('/api/setup-db', async (c) => {
       c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS notificaciones (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         usuario_id TEXT NOT NULL,
+        titulo TEXT,
         mensaje TEXT NOT NULL,
         tipo TEXT DEFAULT 'info',
         leida INTEGER DEFAULT 0,
@@ -1422,6 +1448,7 @@ app.get('/api/admin/migrar-db', async (c) => {
     if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
 
     await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN vistas INTEGER DEFAULT 0`).catch(() => console.log('Columna vistas ya existe'));
+    await c.env.DB.exec(`ALTER TABLE notificaciones ADD COLUMN titulo TEXT`).catch(() => console.log('Columna titulo ya existe'));
     
     await c.env.DB.exec(`
       ALTER TABLE noticias ADD COLUMN patrocinada INTEGER DEFAULT 0;
@@ -2299,22 +2326,14 @@ app.post('/api/admin/solicitudes/:id', async (c) => {
       await c.env.DB.batch([
         c.env.DB.prepare("UPDATE usuarios SET rol = 'autor' WHERE id = ?").bind(solicitud.usuario_id),
         c.env.DB.prepare("UPDATE solicitudes_autor SET estado = 'aprobado' WHERE id = ?").bind(requestId),
-        c.env.DB.prepare("INSERT INTO notificaciones (usuario_id, mensaje, tipo) VALUES (?, ?, ?)").bind(
-          solicitud.usuario_id, 
-          '¡Tu solicitud para ser autor ha sido aprobada! Ya puedes publicar noticias.', 
-          'success'
-        )
       ]);
+      await notifyUser(c, solicitud.usuario_id, 'Solicitud de Autor', '¡Tu solicitud para ser autor ha sido aprobada! Ya puedes publicar noticias.', 'success');
       console.log(`[EMAIL SIMULATION] To: ${solicitud.email} - Subject: ¡Felicidades, ya eres autor! - Body: Hola ${solicitud.nombre}, tu solicitud ha sido aprobada.`);
     } else {
       await c.env.DB.batch([
         c.env.DB.prepare("UPDATE solicitudes_autor SET estado = 'rechazado' WHERE id = ?").bind(requestId),
-        c.env.DB.prepare("INSERT INTO notificaciones (usuario_id, mensaje, tipo) VALUES (?, ?, ?)").bind(
-          solicitud.usuario_id, 
-          'Lamentamos informarte que tu solicitud para ser autor no ha sido aprobada en esta ocasión.', 
-          'warning'
-        )
       ]);
+      await notifyUser(c, solicitud.usuario_id, 'Solicitud de Autor', 'Lamentamos informarte que tu solicitud para ser autor no ha sido aprobada en esta ocasión.', 'warning');
       console.log(`[EMAIL SIMULATION] To: ${solicitud.email} - Subject: Actualización sobre tu solicitud - Body: Hola ${solicitud.nombre}, lamentamos informarte que tu solicitud ha sido rechazada.`);
     }
 
@@ -2367,14 +2386,13 @@ app.post('/api/admin/patrocinios/:id/estado', async (c) => {
     await c.env.DB.prepare("UPDATE patrocinios SET estado = ? WHERE id = ?").bind(estado, patrocinioId).run();
 
     // Notificar al autor
-    await c.env.DB.prepare(`
-      INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo) 
-      VALUES (?, 'Estado de Patrocinio', ?, 'sistema')
-    `).bind(
+    await notifyUser(
+      c, 
       patrocinio.autor_id, 
+      'Estado de Patrocinio', 
       `El patrocinio para la marca "${patrocinio.marca}" ha cambiado de estado a: ${estado}.`,
       'sistema'
-    ).run();
+    );
 
     return c.json({ message: 'Estado de patrocinio actualizado' });
   } catch (error: any) {

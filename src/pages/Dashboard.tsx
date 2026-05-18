@@ -10,7 +10,7 @@ import {
   Settings, User as UserIcon, Trash2, Edit, CheckCircle, XCircle,
   Clock, AlertCircle, Bell, Users, Calendar, ArrowUpRight, 
   Smartphone, Monitor, Globe, Activity, ChevronLeft, ChevronRight,
-  Eye, Share2, Database, ShieldAlert, RefreshCw
+  Eye, Share2, Database, ShieldAlert, ShieldCheck, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { compressImage } from '../lib/imageUtils';
@@ -461,7 +461,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
             <TabButton 
               active={activeTab === 'verify'} 
               onClick={() => setActiveTab('verify')} 
-              icon={<ShieldAlert className={`w-4 h-4 ${user.estado_verificacion === 'aprobado' ? 'text-green-500' : ''}`} />} 
+              icon={user.estado_verificacion === 'aprobado' ? <ShieldCheck className="w-4 h-4 text-green-500" /> : <ShieldAlert className="w-4 h-4" />} 
               label={user.estado_verificacion === 'aprobado' ? 'Identidad Verificada' : 'Verificar Identidad'} 
             />
           )}
