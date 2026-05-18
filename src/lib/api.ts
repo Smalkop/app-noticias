@@ -168,6 +168,8 @@ export const api = {
         body: JSON.stringify({ accion })
       }) as any,
     listVerificaciones: (): Promise<any[]> => fetchWithAuth('/api/admin/verificaciones') as any,
+    pedirVerificacion: (id: string): Promise<any> =>
+      fetchWithAuth(`/api/admin/usuarios/${id}/pedir-verificacion`, { method: 'POST' }) as any,
     listPaginas: (): Promise<any[]> => fetchWithAuth('/api/admin/paginas') as any,
     createPagina: (data: any): Promise<any> =>
       fetchWithAuth('/api/admin/paginas', {

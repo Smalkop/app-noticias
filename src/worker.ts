@@ -68,6 +68,20 @@ function sanitize(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+// Helper to delete from R2
+async function deleteFromR2(c: any, url: string | null | undefined) {
+  if (!url || typeof url !== 'string' || !url.includes('/api/images/')) return;
+  try {
+    const key = url.split('/api/images/').pop();
+    if (key) {
+      await c.env.IMAGES.delete(decodeURIComponent(key));
+      console.log('Deleted from R2:', key);
+    }
+  } catch (e) {
+    console.error('Error deleting from R2:', e);
+  }
+}
+
 // Password validation helper
 function isPasswordSafe(password: string): boolean {
   // Min 8 characters, upper, lower, number, special char
@@ -430,6 +444,16 @@ app.put('/api/auth/perfil', async (c) => {
     const payload = await verify(token, secret, 'HS256') as any;
     const { nombre, bio, foto_perfil, telefono, selfie, cedula_frontal, cedula_trasera } = await c.req.json();
 
+    // Get current user to check for old images
+    const oldUser: any = await c.env.DB.prepare('SELECT selfie, cedula_frontal, cedula_trasera FROM usuarios WHERE id = ?').bind(payload.id).first();
+
+    if (oldUser) {
+      // If user is sending NEW verification images, and they are different, delete old ones
+      if (selfie && selfie !== oldUser.selfie) await deleteFromR2(c, oldUser.selfie);
+      if (cedula_frontal && cedula_frontal !== oldUser.cedula_frontal) await deleteFromR2(c, oldUser.cedula_frontal);
+      if (cedula_trasera && cedula_trasera !== oldUser.cedula_trasera) await deleteFromR2(c, oldUser.cedula_trasera);
+    }
+
     await c.env.DB.prepare(`
       UPDATE usuarios 
       SET nombre = ?, 
@@ -439,12 +463,12 @@ app.put('/api/auth/perfil', async (c) => {
           selfie = COALESCE(?, selfie),
           cedula_frontal = COALESCE(?, cedula_frontal),
           cedula_trasera = COALESCE(?, cedula_trasera),
-          estado_verificacion = CASE WHEN ? IS NOT NULL THEN 'pendiente' ELSE estado_verificacion END
+          estado_verificacion = CASE WHEN ? IS NOT NULL OR ? IS NOT NULL THEN 'pendiente' ELSE estado_verificacion END
       WHERE id = ?
     `).bind(
       nombre, bio, foto_perfil, telefono, 
       selfie || null, cedula_frontal || null, cedula_trasera || null,
-      selfie || cedula_frontal ? 'si' : null,
+      selfie || null, cedula_frontal || null,
       payload.id
     ).run();
 
@@ -742,8 +766,41 @@ app.post('/api/admin/verificaciones/:id', async (c) => {
   
   if (accion === 'aprobar') {
     await c.env.DB.prepare('UPDATE usuarios SET verificado = 1 WHERE id = ?').bind(id).run();
+    
+    // Notify user
+    await c.env.DB.prepare(`
+      INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, leida)
+      VALUES (?, '¡Identidad Verificada!', 'Tu proceso de verificación ha sido aprobado con éxito.', 'verificacion', 0)
+    `).bind(id).run();
+  } else {
+    // Notify user of rejection
+    await c.env.DB.prepare(`
+      INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, leida)
+      VALUES (?, 'Verificación Rechazada', 'Tu solicitud de verificación ha sido rechazada. Por favor, sube documentos legibles si deseas intentarlo nuevamente.', 'sistema', 0)
+    `).bind(id).run();
   }
   
+  return c.json({ success: true });
+});
+
+// Admin: Solicitar enviar fotos de identidad de nuevo (Reset)
+app.post('/api/admin/usuarios/:id/pedir-verificacion', async (c) => {
+  const token = getCookie(c, 'token');
+  if (!token) return c.json({ error: 'No autorizado' }, 401);
+  const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+  const payload = await verify(token, secret, 'HS256') as any;
+  if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
+
+  const id = c.req.param('id');
+  
+  // Set status to rejected or none so user can see the option again
+  await c.env.DB.prepare('UPDATE usuarios SET estado_verificacion = "ninguno" WHERE id = ?').bind(id).run();
+  
+  await c.env.DB.prepare(`
+    INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, leida)
+    VALUES (?, 'Nueva Verificación Requerida', 'El administrador ha solicitado que vuelvas a subir tus documentos de identidad.', 'sistema', 0)
+  `).bind(id).run();
+
   return c.json({ success: true });
 });
 
@@ -767,16 +824,30 @@ app.get('/api/patrocinios/mis-patrocinios', async (c) => {
 app.post('/api/patrocinios/solicitar', async (c) => {
   const token = getCookie(c, 'token');
   if (!token) return c.json({ error: 'No autorizado' }, 401);
-  const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
-  const payload = await verify(token, secret, 'HS256') as any;
   
-  const { marca, ruc, monto, comprobante } = await c.req.json();
-  const id = crypto.randomUUID();
-  
-  await c.env.DB.prepare('INSERT INTO patrocinios (id, autor_id, marca, ruc, monto, comprobante, estado) VALUES (?, ?, ?, ?, ?, ?, "pendiente")')
-    .bind(id, payload.id, marca, ruc, monto, comprobante).run();
+  try {
+    const secret = c.env.JWT_SECRET || DEFAULT_SECRET;
+    const payload = await verify(token, secret, 'HS256') as any;
     
-  return c.json({ id });
+    if (!payload || !payload.id) {
+      return c.json({ error: 'Token inválido o expirado' }, 401);
+    }
+    
+    const { marca, ruc, monto, comprobante } = await c.req.json();
+    if (!marca || !monto) {
+      return c.json({ error: 'Marca y monto son obligatorios' }, 400);
+    }
+
+    const id = crypto.randomUUID();
+    
+    await c.env.DB.prepare('INSERT INTO patrocinios (id, autor_id, marca, ruc, monto, comprobante, estado) VALUES (?, ?, ?, ?, ?, ?, "pendiente")')
+      .bind(id, payload.id, marca, ruc, Number(monto), comprobante).run();
+      
+    return c.json({ id });
+  } catch (err: any) {
+    console.error('Sponsorship Request Error:', err);
+    return c.json({ error: 'Error al procesar la solicitud de patrocinio', details: err.message }, 500);
+  }
 });
 
 // Notificaciones: List

@@ -461,8 +461,8 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
             <TabButton 
               active={activeTab === 'verify'} 
               onClick={() => setActiveTab('verify')} 
-              icon={<ShieldAlert className="w-4 h-4" />} 
-              label="Verificar Identidad" 
+              icon={<ShieldAlert className={`w-4 h-4 ${user.estado_verificacion === 'aprobado' ? 'text-green-500' : ''}`} />} 
+              label={user.estado_verificacion === 'aprobado' ? 'Identidad Verificada' : 'Verificar Identidad'} 
             />
           )}
           {user.rol === 'autor' && (
@@ -923,16 +923,40 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
               <div className="max-w-2xl mx-auto">
                 <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-xl space-y-8">
                   <div className="text-center">
-                    <ShieldAlert className="w-16 h-16 text-red-600 mx-auto mb-4" />
-                    <h2 className="text-3xl font-serif font-black text-gray-900">Verificación de Identidad</h2>
-                    <p className="text-gray-500 mt-2">Para mantener la integridad de Lapacho Post, requerimos que todos los autores verifiquen su identidad real.</p>
+                    <ShieldAlert className={`w-16 h-16 ${user.estado_verificacion === 'aprobado' ? 'text-green-600' : 'text-red-600'} mx-auto mb-4`} />
+                    <h2 className="text-3xl font-serif font-black text-gray-900">
+                      {user.estado_verificacion === 'aprobado' ? 'Tu Identidad está Verificada' : 'Verificación de Identidad'}
+                    </h2>
+                    <p className="text-gray-500 mt-2">
+                      {user.estado_verificacion === 'aprobado' 
+                        ? 'Gracias por ayudarnos a mantener Lapacho Post como un entorno seguro y confiable.' 
+                        : 'Para mantener la integridad de Lapacho Post, requerimos que todos los autores verifiquen su identidad real.'}
+                    </p>
                   </div>
 
                   {user.estado_verificacion === 'aprobado' ? (
-                    <div className="bg-green-50 border border-green-200 p-6 rounded-2xl text-center">
-                      <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
-                      <h4 className="font-bold text-green-900 text-xl">Identidad Verificada</h4>
-                      <p className="text-green-700">Tu cuenta está plenamente validada. Gracias por ser parte de nuestra red de confianza.</p>
+                    <div className="space-y-6">
+                      <div className="bg-green-50 border border-green-200 p-6 rounded-2xl flex items-center gap-4">
+                        <CheckCircle className="w-8 h-8 text-green-600" />
+                        <div>
+                          <p className="font-bold text-green-900">¡Verificación Exitosa!</p>
+                          <p className="text-sm text-green-700">Tus documentos han sido validados por el equipo administrativo. No puedes realizar cambios a menos que se solicite una nueva verificación.</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 opacity-70 grayscale hover:grayscale-0 transition-all">
+                        <div className="space-y-2 text-center">
+                          <p className="text-[10px] font-black text-gray-400 uppercase">Selfie</p>
+                          {user.selfie && <img src={user.selfie} className="w-full h-32 object-cover rounded-xl border-2 border-white shadow-sm" />}
+                        </div>
+                        <div className="space-y-2 text-center">
+                          <p className="text-[10px] font-black text-gray-400 uppercase">Frente</p>
+                          {user.cedula_frontal && <img src={user.cedula_frontal} className="w-full h-32 object-cover rounded-xl border-2 border-white shadow-sm" />}
+                        </div>
+                        <div className="space-y-2 text-center">
+                          <p className="text-[10px] font-black text-gray-400 uppercase">Dorso</p>
+                          {user.cedula_trasera && <img src={user.cedula_trasera} className="w-full h-32 object-cover rounded-xl border-2 border-white shadow-sm" />}
+                        </div>
+                      </div>
                     </div>
                   ) : user.estado_verificacion === 'pendiente' ? (
                     <div className="bg-blue-50 border border-blue-200 p-6 rounded-2xl text-center">
@@ -949,7 +973,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                           selfie: selfieUrl,
                           cedula_frontal: cedulaFrontalUrl,
                           cedula_trasera: cedulaTraseraUrl,
-                          nombre, bio, foto_perfil: perfilUrl, telefono // preserve other fields
+                          nombre, bio, foto_perfil: perfilUrl, telefono 
                         });
                         alert('Documentos enviados correctamente.');
                         const freshUser = await api.auth.me();
@@ -960,10 +984,19 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                         setLoading(false);
                       }
                     }} className="space-y-6">
+                      <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                        <p className="text-sm text-amber-800">
+                          {user.estado_verificacion === 'rechazado' 
+                            ? 'Tu solicitud anterior fue rechazada. Por favor sube fotos más nítidas y vuelve a intentarlo.' 
+                            : 'Debes subir una selfie sosteniendo tu cédula y fotos legibles del frente y dorso de tu documento.'}
+                        </p>
+                      </div>
+
                       <div className="space-y-4">
                         <label className="block text-sm font-black text-gray-400 uppercase tracking-widest">1. Selfie con Rostro Visible</label>
                         <div className="flex items-center gap-4">
-                          <label className="flex-1 cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center gap-2 hover:border-red-400 text-gray-500">
+                          <label className="flex-1 cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center gap-2 hover:border-red-400 text-gray-500 transition-all">
                             <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'selfie')} />
                             <ImageIcon className="w-8 h-8" />
                             <span className="text-sm font-bold">{uploading ? 'Subiendo...' : 'Subir Selfie'}</span>
@@ -973,7 +1006,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
                         <label className="block text-sm font-black text-gray-400 uppercase tracking-widest">2. Foto de Cédula (Frente)</label>
                         <div className="flex items-center gap-4">
-                          <label className="flex-1 cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center gap-2 hover:border-red-400 text-gray-500">
+                          <label className="flex-1 cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center gap-2 hover:border-red-400 text-gray-500 transition-all">
                             <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'cedula_frontal')} />
                             <ImageIcon className="w-8 h-8" />
                             <span className="text-sm font-bold">{uploading ? 'Subiendo...' : 'Subir Frente'}</span>
@@ -983,7 +1016,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
                         <label className="block text-sm font-black text-gray-400 uppercase tracking-widest">3. Foto de Cédula (Dorso)</label>
                         <div className="flex items-center gap-4">
-                          <label className="flex-1 cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center gap-2 hover:border-red-400 text-gray-500">
+                          <label className="flex-1 cursor-pointer bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center gap-2 hover:border-red-400 text-gray-500 transition-all">
                             <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'cedula_trasera')} />
                             <ImageIcon className="w-8 h-8" />
                             <span className="text-sm font-bold">{uploading ? 'Subiendo...' : 'Subir Dorso'}</span>
@@ -997,7 +1030,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                         disabled={!selfieUrl || !cedulaFrontalUrl || !cedulaTraseraUrl || uploading}
                         className="w-full bg-red-600 text-white py-4 rounded-xl font-bold hover:bg-black transition-all shadow-lg disabled:opacity-50"
                       >
-                        Enviar para Revisión
+                        {uploading ? 'Subiendo archivos...' : 'Enviar para Revisión'}
                       </button>
                     </form>
                   )}
@@ -1546,6 +1579,24 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                           </div>
                         </div>
                         <div className="flex gap-2">
+                          {u.rol === 'autor' && (
+                            <button 
+                              onClick={async () => {
+                                if(window.confirm('¿Deseas solicitar que este usuario vuelva a verificar su identidad? Se le notificará y se reseteará su estado.')) {
+                                  try {
+                                    await api.admin.pedirVerificacion(u.id);
+                                    alert('Solicitud enviada con éxito');
+                                    handleSearchUsers();
+                                  } catch (e) { alert('Error al procesar solicitud'); }
+                                }
+                              }}
+                              title="Solicitar Re-verificación"
+                              className={`p-2 rounded-lg transition-colors ${u.estado_verificacion === 'aprobado' ? 'text-amber-600 hover:bg-amber-50' : 'text-gray-300 cursor-not-allowed'}`}
+                              disabled={u.estado_verificacion !== 'aprobado'}
+                            >
+                              <ShieldAlert className="w-5 h-5" />
+                            </button>
+                          )}
                           <button 
                             onClick={() => handleSyncSendPulse(u.id)}
                             title="Sincronizar con SendPulse"
