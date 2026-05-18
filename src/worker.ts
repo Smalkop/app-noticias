@@ -1269,7 +1269,7 @@ app.get('/api/json-feed/semanal', async (c) => {
         },
         enlaces: {
           publico: `${baseUrl}/noticia/${n.id}`,
-          miniatura: n.imagen_destacada ? (n.imagen_destacada.startsWith('http') ? n.imagen_destacada : `${baseUrl}${n.imagen_destacada}`) : ""
+          miniatura: n.imagen_destacada ? (n.imagen_destacada.startsWith('http') ? n.imagen_destacada : `${baseUrl}${encodeURI(n.imagen_destacada)}`) : ""
         },
         publicado_el: n.publicado_en
       })),
@@ -1930,7 +1930,7 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
         },
         enlaces: {
           publico: `${baseUrl}/noticia/${n.id}`,
-          miniatura: n.imagen_destacada ? (n.imagen_destacada.startsWith('http') ? n.imagen_destacada : `${baseUrl}${n.imagen_destacada}`) : ""
+          miniatura: n.imagen_destacada ? (n.imagen_destacada.startsWith('http') ? n.imagen_destacada : `${baseUrl}${encodeURI(n.imagen_destacada)}`) : ""
         },
         publicado_el: n.publicado_en || n.creado_en
       })),
@@ -2504,7 +2504,7 @@ app.post('/api/upload', async (c) => {
 
 // Serve R2 images
 app.get('/api/images/*', async (c) => {
-  const key = c.req.path.replace('/api/images/', '');
+  const key = decodeURIComponent(c.req.path.replace('/api/images/', ''));
   const object = await c.env.IMAGES.get(key);
   if (!object) return c.json({ error: 'Imagen no encontrada' }, 404);
 
