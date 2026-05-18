@@ -1135,9 +1135,9 @@ app.get('/api/json-feed/semanal', async (c) => {
         },
         enlaces: {
           publico: `${baseUrl}/noticia/${n.id}`,
-          miniatura: n.imagen_destacada
+          miniatura: n.imagen_destacada ? (n.imagen_destacada.startsWith('http') ? n.imagen_destacada : `${baseUrl}${n.imagen_destacada}`) : ""
         },
-        publicado_el: n.creado_en
+        publicado_el: n.publicado_en
       })),
       metadata: {
         server: "Lapacho_Edge_Worker",
@@ -1728,7 +1728,7 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
 
     const { access_token } = await authRes.json() as any;
 
-    // 2. Prepare Payload (PROHIBIDO MODIFICAR ESTRUCTURA SEGÚN USUARIO)
+    // 2. Prepare Payload (ESTRUCTURA EXACTA SEGÚN VARIABLE MAPPING DE SENDPULSE)
     const spEventUrl = "https://events.sendpulse.com/events/id/92809886656c4d7fca369e52e2b6e38a/8406546";
     const url = new URL(c.req.url);
     const baseUrl = `${url.protocol}//${url.host}`;
@@ -1738,30 +1738,32 @@ app.post('/api/admin/trigger-sendpulse', async (c) => {
       phone: "", 
       event_id: `digest_${Date.now()}`,
       timestamp: new Date().toISOString(),
-      event_type: "noticias_semanales",
-      user: {
-        user_id: payload.id,
-        email: payload.email,
-        name: payload.nombre
+      event_type: "weekly_popular_content",
+      summary: {
+        total_items: (news || []).length,
+        period: "last_7_days_by_views"
       },
-      order: {
-        order_id: `week_${new Date().toISOString().split('T')[0]}`,
-        order_date: new Date().toISOString(),
-        order_status: "active",
-        total_price: news.length,
-        items: (news || []).map((item: any) => ({
-          item_id: item.id,
-          name: item.titulo,
-          quantity: item.vistas || 0,
-          price: 0,
-          link: `${baseUrl}/noticia/${item.id}`,
-          image_url: item.imagen_destacada || "",
-          description: item.subtitulo || (item.contenido.replace(/<[^>]*>?/gm, '').substring(0, 200) + '...')
-        }))
-      },
+      noticias: (news || []).map((n: any) => ({
+        id: n.id,
+        titulo: n.titulo,
+        descripcion: n.contenido.replace(/<[^>]*>?/gm, '').substring(0, 300).trim() + '...',
+        autor: {
+          nombre: n.autor_nombre,
+          id: n.autor_id
+        },
+        estadisticas: {
+          vistas: n.vistas || 0
+        },
+        enlaces: {
+          publico: `${baseUrl}/noticia/${n.id}`,
+          miniatura: n.imagen_destacada ? (n.imagen_destacada.startsWith('http') ? n.imagen_destacada : `${baseUrl}${n.imagen_destacada}`) : ""
+        },
+        publicado_el: n.publicado_en
+      })),
       metadata: {
-        platform: "Lapacho Post",
-        count: news.length
+        server: "Lapacho_Edge_Worker",
+        source: "Manual_Trigger",
+        request_ip: c.req.header('cf-connecting-ip') || '0.0.0.0'
       }
     };
 
