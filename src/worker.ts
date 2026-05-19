@@ -1467,8 +1467,8 @@ app.get('/api/admin/migrar-db', async (c) => {
     await c.env.DB.exec(`ALTER TABLE metricas_visitas ADD COLUMN scroll INTEGER DEFAULT 0`).catch(() => {});
 
     // New tables
-    await c.env.DB.exec(`
-      CREATE TABLE IF NOT EXISTS patrocinios (
+    const tableQueries = [
+      { name: 'patrocinios', query: `CREATE TABLE IF NOT EXISTS patrocinios (
         id TEXT PRIMARY KEY,
         autor_id TEXT NOT NULL,
         marca TEXT NOT NULL,
@@ -1478,25 +1478,22 @@ app.get('/api/admin/migrar-db', async (c) => {
         estado TEXT DEFAULT 'pendiente',
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (autor_id) REFERENCES usuarios(id)
-      );
-      CREATE TABLE IF NOT EXISTS reacciones (
+      )` },
+      { name: 'reacciones', query: `CREATE TABLE IF NOT EXISTS reacciones (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         noticia_id TEXT,
         usuario_id TEXT,
         tipo TEXT,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(noticia_id, usuario_id),
-        FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE,
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS noticia_shares (
+        UNIQUE(noticia_id, usuario_id)
+      )` },
+      { name: 'noticia_shares', query: `CREATE TABLE IF NOT EXISTS noticia_shares (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         noticia_id TEXT,
         plataforma TEXT,
-        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS paginas (
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      )` },
+      { name: 'paginas', query: `CREATE TABLE IF NOT EXISTS paginas (
         id TEXT PRIMARY KEY,
         slug TEXT UNIQUE NOT NULL,
         titulo TEXT NOT NULL,
@@ -1504,13 +1501,24 @@ app.get('/api/admin/migrar-db', async (c) => {
         activa INTEGER DEFAULT 1,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS webhook_logs (
+      )` },
+      { name: 'webhook_logs', query: `CREATE TABLE IF NOT EXISTS webhook_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         payload TEXT,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `).catch(() => console.log('Tablas ya existen o error'));
+      )` }
+    ];
+
+    const results = [];
+    for (const item of tableQueries) {
+      try {
+        await c.env.DB.prepare(item.query).run();
+        results.push({ table: item.name, status: 'ok' });
+      } catch (e: any) {
+        results.push({ table: item.name, status: 'error', error: e.message });
+        console.error(`Migration error for ${item.name}:`, e.message);
+      }
+    }
 
     await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN verificado INTEGER DEFAULT 0`).catch(() => {});
     await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN telefono TEXT`).catch(() => {});
@@ -1519,10 +1527,11 @@ app.get('/api/admin/migrar-db', async (c) => {
     await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN cedula_trasera TEXT`).catch(() => {});
     await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN estado_verificacion TEXT DEFAULT 'ninguno'`).catch(() => {});
     
-    const { results: tables }: any = await c.env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+    const { results: allTables }: any = await c.env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
     return c.json({ 
-      message: 'Migración completada con éxito. Todas las columnas y tablas han sido revisadas.',
-      tables: (tables || []).map((t: any) => t.name)
+      message: 'Migración procesada',
+      results,
+      tables: (allTables || []).map((t: any) => t.name)
     });
   } catch (error: any) {
     return c.json({ error: 'Error en migración', details: error.message }, 500);

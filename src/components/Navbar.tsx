@@ -58,12 +58,15 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
                       <UserIcon className="w-5 h-5 text-gray-500" />
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-sm font-medium hidden sm:block">{user.nombre}</span>
-                    {user.estado_verificacion === 'aprobado' && (
-                      <ShieldCheck className="w-4 h-4 text-green-500" />
-                    )}
-                  </div>
+                    <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+                      <span className="text-sm font-bold text-gray-900 hidden sm:block">{user.nombre}</span>
+                      {user.estado_verificacion === 'aprobado' && (
+                        <div className="flex items-center gap-1 bg-green-50 px-1.5 py-0.5 rounded-md border border-green-100">
+                          <ShieldCheck className="w-3.5 h-3.5 text-green-600" />
+                          <span className="text-[10px] font-black text-green-700 uppercase hidden lg:block">Verificado</span>
+                        </div>
+                      )}
+                    </div>
                   <ChevronDown className="w-4 h-4 text-gray-500" />
                 </button>
                 
@@ -157,10 +160,13 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
                       )}
                     </div>
                     <div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="font-bold text-gray-900 text-sm truncate max-w-[150px]">{user.nombre}</p>
                         {user.estado_verificacion === 'aprobado' && (
-                          <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
+                          <div className="flex items-center gap-1 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
+                            <ShieldCheck className="w-3 h-3 text-green-600" />
+                            <span className="text-[10px] font-black text-green-700 uppercase">Verificado</span>
+                          </div>
                         )}
                       </div>
                       <Link to="/dashboard" onClick={() => setIsMenuOpen(false)} className="text-[10px] uppercase font-black text-red-600">Ver Dashboard</Link>

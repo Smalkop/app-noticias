@@ -413,10 +413,13 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
             </div>
           )}
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <h1 className="text-3xl font-serif font-bold text-gray-900">Hola, {user.nombre}!</h1>
               {user.estado_verificacion === 'aprobado' && (
-                <ShieldCheck className="w-6 h-6 text-green-500" title="Identidad Verificada" />
+                <div className="flex items-center gap-2 bg-green-100/50 px-3 py-1 rounded-full border border-green-200">
+                  <ShieldCheck className="w-5 h-5 text-green-600" />
+                  <span className="text-xs font-black text-green-700 uppercase tracking-wider">Perfil Verificado</span>
+                </div>
               )}
             </div>
             <p className="text-gray-500 capitalize">{user.rol} • {user.email}</p>
@@ -1907,166 +1910,153 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-gray-100">
-                <h3 className="text-xl font-bold flex items-center gap-2">
-                  <Database className="w-5 h-5 text-red-600" /> Mantenimiento de Base de Datos
-                </h3>
+            {/* Dashboard de Mantenimiento Rediseñado */}
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl overflow-hidden mb-12">
+              <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-8 text-white">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <h3 className="text-2xl font-serif font-black flex items-center gap-3">
+                      <Settings className="w-10 h-10 text-red-500" /> Panel de Mantenimiento
+                    </h3>
+                    <p className="text-gray-400 text-sm">Control total sobre infraestructura, sincronización y auditoría del sistema.</p>
+                  </div>
+                  <Database className="w-12 h-12 text-white/5" />
+                </div>
               </div>
-              <div className="p-6 space-y-4">
-                <div className="flex flex-wrap gap-4">
-                  <button 
-                    onClick={async () => {
-                      if(window.confirm('¿Desea ejecutar la migración técnica? Esto reparará columnas faltantes (como Teléfono) y tablas de logs.')) {
+              
+              <div className="p-8 bg-gray-50/30">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {/* Sincronización Principal */}
+                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all groups">
+                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4">
+                      <RefreshCw className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-gray-900">Base de Datos</h4>
+                    <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-4">Sincronización Total</p>
+                    <button 
+                      onClick={async () => {
+                        setLoading(true);
                         try {
-                          const res = await api.admin.migrarDB();
-                          alert(res.message || 'Migración exitosa');
-                          window.location.reload();
-                        } catch (e: any) { 
-                          alert('Error: ' + e.message); 
-                        }
-                      }
-                    }}
-                    className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700 transition-all flex items-center gap-2"
-                  >
-                    <Database className="w-5 h-5" /> Migrar / Reparar Base de Datos
-                  </button>
-
-                  <button 
-                    onClick={async () => {
-                      if(window.confirm('¿Desea sincronizar el estado de verificación con SendPulse manualmente?')) {
-                        try {
-                          const res = await fetch('/api/admin/sync-verificaciones', { method: 'POST' });
+                          const res = await fetch('/api/admin/migrar-db');
                           const data: any = await res.json();
-                          alert(data.message || 'Sincronización completada');
-                          window.location.reload();
-                        } catch (e) { alert('Error al sincronizar usuarios'); }
-                      }
-                    }}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
-                  >
-                    <RefreshCw className="w-5 h-5" /> Sincronizar con SendPulse
-                  </button>
+                          alert('✅ ' + (data.message || 'Sistema sincronizado con éxito'));
+                        } catch (e) { alert('❌ Error'); }
+                        finally { setLoading(false); }
+                      }}
+                      className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold text-xs hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100"
+                    >
+                      Sincronizar DB
+                    </button>
+                  </div>
 
-                  <div className="flex flex-wrap gap-4">
+                  {/* Integridad Cascadas */}
+                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group">
+                    <div className="w-12 h-12 bg-red-50 text-red-600 rounded-xl flex items-center justify-center mb-4">
+                      <ShieldAlert className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-gray-900">Integridad</h4>
+                    <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-4">Foreign Keys / Cascades</p>
+                    <button 
+                      onClick={async () => {
+                        if(window.confirm('¿Reparar integridad estructural?')) {
+                          try {
+                            const res = await fetch('/api/admin/fix-cascades');
+                            const data: any = await res.json();
+                            alert('✅ ' + data.message);
+                          } catch (e) { alert('❌ Error'); }
+                        }
+                      }}
+                      className="w-full bg-gray-900 text-white py-2.5 rounded-xl font-bold text-xs hover:bg-black transition-colors"
+                    >
+                      Reparar Borrado
+                    </button>
+                  </div>
+
+                  {/* SendPulse Diag */}
+                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group">
+                    <div className="w-12 h-12 bg-green-50 text-green-600 rounded-xl flex items-center justify-center mb-4">
+                      <Bell className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-gray-900">Notificaciones</h4>
+                    <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-4">Diagnóstico SendPulse</p>
+                    <button 
+                      onClick={async () => {
+                        try {
+                          await fetch('/api/admin/test-sendpulse');
+                          alert('✅ Diagnóstico enviado correctamente.');
+                        } catch (e) { alert('❌ Error'); }
+                      }}
+                      className="w-full bg-green-600 text-white py-2.5 rounded-xl font-bold text-xs hover:bg-green-700 transition-colors shadow-lg shadow-green-100"
+                    >
+                      Diagnóstico API
+                    </button>
+                  </div>
+
+                  {/* Logs de Webhook */}
+                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group">
+                    <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center mb-4">
+                      <Activity className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-gray-900">Auditoría</h4>
+                    <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-4">Logs de Webhook</p>
+                    <button 
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/admin/webhook-logs');
+                          const data: any = await res.json();
+                          console.log('Webhook Logs:', data);
+                          alert('Logs volcados en consola (F12)');
+                        } catch (e) { alert('❌ Error'); }
+                      }}
+                      className="w-full bg-amber-500 text-white py-2.5 rounded-xl font-bold text-xs hover:bg-amber-600 transition-colors shadow-lg shadow-amber-100"
+                    >
+                      Ver Historial
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-gray-100 flex flex-wrap gap-6 items-center justify-between">
+                  <div className="flex gap-6">
+                    <button 
+                      onClick={async () => {
+                        if(window.confirm('¿Disparar evento semanal ahora?')) {
+                          try {
+                            await api.admin.triggerSendPulse();
+                            alert('✅ Evento enviado');
+                          } catch (e: any) { alert('❌ ' + e.message); }
+                        }
+                      }}
+                      className="flex items-center gap-2 text-xs font-black uppercase text-purple-600 hover:text-purple-800 transition-colors tracking-widest"
+                    >
+                      <Send className="w-4 h-4" /> Disparar Semanal
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        if(window.confirm('¿Limpiar usuarios inactivos?')) {
+                          try {
+                            await fetch('/api/admin/limpiar-usuarios', { method: 'POST' });
+                            alert('✅ Limpieza realizada');
+                          } catch (e) { alert('❌ Error'); }
+                        }
+                      }}
+                      className="flex items-center gap-2 text-xs font-black uppercase text-red-600 hover:text-red-800 transition-colors tracking-widest"
+                    >
+                      <Trash2 className="w-4 h-4" /> Limpiar Inactivos
+                    </button>
                     <a 
                       href="/api/json-feed/semanal"
                       target="_blank"
                       rel="noreferrer"
-                      className="bg-gray-800 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-900 transition-all flex items-center gap-2"
+                      className="flex items-center gap-2 text-xs font-black uppercase text-gray-500 hover:text-gray-800 transition-colors tracking-widest"
                     >
-                      <Database className="w-5 h-5" /> JSON Popular
+                      <Database className="w-4 h-4" /> JSON Feed
                     </a>
                   </div>
-
-
-                  <button 
-                    onClick={async () => {
-                      try {
-                        const res = await fetch('/api/admin/webhook-logs');
-                        const data: any = await res.json();
-                        if (data.length === 0) {
-                          alert('No hay logs de webhooks registrados aún.');
-                        } else {
-                          const logSummary = data.map((l: any) => `[${l.creado_en}] ${l.payload}`).join('\n\n---\n\n');
-                          console.log('Webhook Logs:', data);
-                          alert('Logs mostrados en consola (F12) para mejor lectura.\n\nÚltimos logs:\n' + logSummary.substring(0, 1000) + '...');
-                        }
-                      } catch (e) { alert('Error al cargar logs'); }
-                    }}
-                    className="bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center gap-2"
-                  >
-                    <Activity className="w-5 h-5" /> Ver Logs de Webhook
-                  </button>
-
-                  <button 
-                    onClick={async () => {
-                      if(window.confirm('¿Desea limpiar los usuarios no verificados que tienen más de 24 horas?')) {
-                        try {
-                          const res = await fetch('/api/admin/limpiar-usuarios', { method: 'POST' });
-                          const data: any = await res.json();
-                          alert(`Limpieza completada. Usuarios eliminados: ${data.deleted || 0}`);
-                        } catch (e) { alert('Error al limpiar usuarios'); }
-                      }
-                    }}
-                    className="bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all flex items-center gap-2"
-                  >
-                    <Trash2 className="w-5 h-5" /> Limpiar usuarios no verificados
-                  </button>
-
-                  <button 
-                    onClick={async () => {
-                      if(window.confirm('¡ATENCIÓN! Esto recreará las tablas para permitir el borrado en cascada (CASCADE). Asegúrese de haber realizado una copia de seguridad si es necesario. ¿Continuar?')) {
-                        try {
-                          const res = await fetch('/api/admin/fix-cascades');
-                          const data: any = await res.json();
-                          alert(data.message || 'Proceso finalizado');
-                        } catch (e) { alert('Error al actualizar cascadas'); }
-                      }
-                    }}
-                    className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-black transition-all flex items-center gap-2"
-                  >
-                    <ShieldAlert className="w-5 h-5" /> Corregir Errores de Borrado (CASCADE)
-                  </button>
-
-                  <button 
-                    onClick={async () => {
-                      if(!window.confirm('Se realizará una prueba de envío de confirmación a tu correo. ¿Continuar?')) return;
-                      try {
-                        const res = await fetch('/api/admin/test-sendpulse');
-                        const data: any = await res.json();
-                        if (res.ok) {
-                          const listData = Array.isArray(data.list) ? data.list[0] : data.list;
-                          let summary = `Configuración SendPulse:\n`;
-                          summary += `Lista: ${listData?.name || 'N/A'}\n`;
-                          summary += `Remitente: gonzalez@brahian.dev\n\n`;
-                          
-                          if (data.results && data.results.length > 0) {
-                            const r = data.results[0];
-                            summary += `Resultado Prueba: ${r.ok ? 'EXITOSA ✅' : 'FALLIDA ❌'}\n`;
-                            summary += `Mensaje: ${JSON.stringify(r.data)}\n\n`;
-                            if (r.ok) summary += `Revisa tu bandeja de entrada en gonzalez@brahian.dev o el correo de admin.`;
-                          }
-                          alert(summary);
-                        } else {
-                          alert(`Error de Diagnóstico: ${data.error}\n${data.details || ''}`);
-                        }
-                      } catch (e) { alert('Error de conexión con el servidor'); }
-                    }}
-                    className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 transition-all flex items-center gap-2"
-                  >
-                    <Bell className="w-5 h-5" /> Diagnóstico SendPulse
-                  </button>
-
-                  <button 
-                    onClick={async () => {
-                      if(!window.confirm('¿Desea disparar el evento de Noticias Destacadas a SendPulse ahora? Esto enviará el top 10 semanal.')) return;
-                      try {
-                        const res = await api.admin.triggerSendPulse();
-                        alert(res.message || 'Evento disparado con éxito');
-                      } catch (e: any) { 
-                        alert('Error: ' + e.message); 
-                      }
-                    }}
-                    className="bg-purple-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-purple-700 transition-all flex items-center gap-2"
-                  >
-                    <Send className="w-5 h-5" /> Disparar Evento Semanal (SendPulse)
-                  </button>
-
-                  <button 
-                    onClick={async () => {
-                      try {
-                        const res = await fetch('/api/admin/migrar-db');
-                        const data: any = await res.json();
-                        alert(data.message || 'Migración completada');
-                      } catch (e) { alert('Error en migración'); }
-                    }}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
-                  >
-                    <RefreshCw className="w-5 h-5" /> Sincronizar Columnas (Migrar DB)
-                  </button>
+                  <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full">
+                    <Clock className="w-3 h-3 text-gray-400" />
+                    <span className="text-[10px] text-gray-500 font-bold uppercase">Estado: Operativo</span>
+                  </div>
                 </div>
-                <p className="text-sm text-gray-500 italic">Use "Corregir Errores de Borrado" si recibe errores de 'FOREIGN KEY constraint failed' al intentar eliminar usuarios manualmente.</p>
               </div>
             </div>
 
