@@ -413,7 +413,12 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
             </div>
           )}
           <div>
-            <h1 className="text-3xl font-serif font-bold text-gray-900">Hola, {user.nombre}!</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-serif font-bold text-gray-900">Hola, {user.nombre}!</h1>
+              {user.estado_verificacion === 'aprobado' && (
+                <ShieldCheck className="w-6 h-6 text-green-500" title="Identidad Verificada" />
+              )}
+            </div>
             <p className="text-gray-500 capitalize">{user.rol} • {user.email}</p>
           </div>
         </div>
@@ -1058,8 +1063,8 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                       setPatrocinioRUC('');
                       setPatrocinioMonto('');
                       setImagenUrl('');
-                    } catch (err) {
-                      alert('Error al solicitar patrocinio');
+                    } catch (err: any) {
+                      alert('Error al solicitar patrocinio: ' + (err.message || 'Error desconocido'));
                     } finally {
                       setLoading(false);
                     }

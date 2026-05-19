@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Categoria } from '../types';
-import { Menu, User as UserIcon, LogOut, ChevronDown, Search } from 'lucide-react';
+import { Menu, User as UserIcon, LogOut, ChevronDown, Search, ShieldCheck } from 'lucide-react';
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -58,7 +58,12 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
                       <UserIcon className="w-5 h-5 text-gray-500" />
                     )}
                   </div>
-                  <span className="text-sm font-medium hidden sm:block">{user.nombre}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm font-medium hidden sm:block">{user.nombre}</span>
+                    {user.estado_verificacion === 'aprobado' && (
+                      <ShieldCheck className="w-4 h-4 text-green-500" />
+                    )}
+                  </div>
                   <ChevronDown className="w-4 h-4 text-gray-500" />
                 </button>
                 
@@ -152,7 +157,12 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
                       )}
                     </div>
                     <div>
-                      <p className="font-bold text-gray-900 text-sm truncate">{user.nombre}</p>
+                      <div className="flex items-center gap-1">
+                        <p className="font-bold text-gray-900 text-sm truncate max-w-[150px]">{user.nombre}</p>
+                        {user.estado_verificacion === 'aprobado' && (
+                          <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
+                        )}
+                      </div>
                       <Link to="/dashboard" onClick={() => setIsMenuOpen(false)} className="text-[10px] uppercase font-black text-red-600">Ver Dashboard</Link>
                     </div>
                   </div>

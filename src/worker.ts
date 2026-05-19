@@ -1447,71 +1447,27 @@ app.get('/api/admin/migrar-db', async (c) => {
     const payload = await verify(token, secret, 'HS256');
     if (payload.rol !== 'admin') return c.json({ error: 'Prohibido' }, 403);
 
-    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN vistas INTEGER DEFAULT 0`).catch(() => console.log('Columna vistas ya existe'));
-    await c.env.DB.exec(`ALTER TABLE notificaciones ADD COLUMN titulo TEXT`).catch(() => console.log('Columna titulo ya existe'));
-    
-    await c.env.DB.exec(`
-      ALTER TABLE noticias ADD COLUMN patrocinada INTEGER DEFAULT 0;
-      ALTER TABLE noticias ADD COLUMN patrocinio_monto REAL;
-      ALTER TABLE noticias ADD COLUMN patrocinio_marca TEXT;
-      ALTER TABLE noticias ADD COLUMN patrocinio_ruc TEXT;
-      ALTER TABLE noticias ADD COLUMN patrocinio_estado TEXT DEFAULT 'pendiente';
-      ALTER TABLE noticias ADD COLUMN patrocinio_comprobante TEXT;
-    `).catch(() => console.log('Columnas patrocionio ya existen'));
+    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN vistas INTEGER DEFAULT 0`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE notificaciones ADD COLUMN titulo TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN patrocinada INTEGER DEFAULT 0`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN patrocinio_monto REAL`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN patrocinio_marca TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN patrocinio_ruc TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN patrocinio_estado TEXT DEFAULT 'pendiente'`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN patrocinio_comprobante TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN patrocinio_id TEXT`).catch(() => {});
 
-    // Advanced metrics migration
-    await c.env.DB.exec(`
-      ALTER TABLE metricas_visitas ADD COLUMN usuario_id TEXT;
-      ALTER TABLE metricas_visitas ADD COLUMN visitor_id TEXT;
-      ALTER TABLE metricas_visitas ADD COLUMN ip TEXT;
-      ALTER TABLE metricas_visitas ADD COLUMN fuente TEXT;
-      ALTER TABLE metricas_visitas ADD COLUMN dispositivo TEXT;
-      ALTER TABLE metricas_visitas ADD COLUMN duracion INTEGER DEFAULT 0;
-      ALTER TABLE metricas_visitas ADD COLUMN scroll INTEGER DEFAULT 0;
-    `).catch(() => console.log('Columnas metricas ya existen'));
+    // Metrics
+    await c.env.DB.exec(`ALTER TABLE metricas_visitas ADD COLUMN usuario_id TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE metricas_visitas ADD COLUMN visitor_id TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE metricas_visitas ADD COLUMN ip TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE metricas_visitas ADD COLUMN fuente TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE metricas_visitas ADD COLUMN dispositivo TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE metricas_visitas ADD COLUMN duracion INTEGER DEFAULT 0`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE metricas_visitas ADD COLUMN scroll INTEGER DEFAULT 0`).catch(() => {});
 
     // New tables
     await c.env.DB.exec(`
-      CREATE TABLE IF NOT EXISTS reacciones (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        noticia_id TEXT,
-        usuario_id TEXT,
-        tipo TEXT,
-        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(noticia_id, usuario_id),
-        FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE,
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS noticia_shares (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        noticia_id TEXT,
-        plataforma TEXT,
-        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE
-      );
-    `).catch(() => console.log('Tablas ya existen'));
-
-    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN verificado INTEGER DEFAULT 0`).catch(() => console.log('Columna verificado ya existe'));
-    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN telefono TEXT`).catch(() => console.log('Columna telefono ya existe'));
-    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN selfie TEXT`).catch(() => console.log('Columna selfie ya existe'));
-    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN cedula_frontal TEXT`).catch(() => console.log('Columna cedula_frontal ya existe'));
-    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN cedula_trasera TEXT`).catch(() => console.log('Columna cedula_trasera ya existe'));
-    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN estado_verificacion TEXT DEFAULT 'ninguno'`).catch(() => console.log('Columna estado_verificacion ya existe'));
-
-    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN patrocinio_id TEXT`).catch(() => console.log('Columna patrocinio_id ya existe'));
-    await c.env.DB.exec(`ALTER TABLE noticias ADD COLUMN patrocinada INTEGER DEFAULT 0`).catch(() => console.log('Columna patrocinada ya existe'));
-
-    // New tables
-    await c.env.DB.exec(`
-      CREATE TABLE IF NOT EXISTS paginas (
-        id TEXT PRIMARY KEY,
-        slug TEXT UNIQUE NOT NULL,
-        titulo TEXT NOT NULL,
-        contenido TEXT NOT NULL,
-        activa INTEGER DEFAULT 1,
-        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
-        actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
       CREATE TABLE IF NOT EXISTS patrocinios (
         id TEXT PRIMARY KEY,
         autor_id TEXT NOT NULL,
@@ -1540,18 +1496,34 @@ app.get('/api/admin/migrar-db', async (c) => {
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (noticia_id) REFERENCES noticias(id) ON DELETE CASCADE
       );
-    `).catch(() => console.log('Tablas ya existen'));
-
-    // Webhook logs table if missing
-    await c.env.DB.exec(`
+      CREATE TABLE IF NOT EXISTS paginas (
+        id TEXT PRIMARY KEY,
+        slug TEXT UNIQUE NOT NULL,
+        titulo TEXT NOT NULL,
+        contenido TEXT NOT NULL,
+        activa INTEGER DEFAULT 1,
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
       CREATE TABLE IF NOT EXISTS webhook_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         payload TEXT,
         creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
       );
-    `).catch(() => console.log('Tabla webhook_logs ya existe'));
+    `).catch(() => console.log('Tablas ya existen o error'));
 
-    return c.json({ message: 'Migración completada con éxito. Todas las columnas y tablas han sido revisadas.' });
+    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN verificado INTEGER DEFAULT 0`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN telefono TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN selfie TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN cedula_frontal TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN cedula_trasera TEXT`).catch(() => {});
+    await c.env.DB.exec(`ALTER TABLE usuarios ADD COLUMN estado_verificacion TEXT DEFAULT 'ninguno'`).catch(() => {});
+    
+    const { results: tables }: any = await c.env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+    return c.json({ 
+      message: 'Migración completada con éxito. Todas las columnas y tablas han sido revisadas.',
+      tables: (tables || []).map((t: any) => t.name)
+    });
   } catch (error: any) {
     return c.json({ error: 'Error en migración', details: error.message }, 500);
   }
