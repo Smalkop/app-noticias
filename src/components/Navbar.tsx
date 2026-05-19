@@ -30,7 +30,7 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
         <div className="flex justify-between h-16 items-center">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <div className="bg-red-600 text-white px-2 py-1 font-serif font-bold text-xl rounded">LP</div>
+            <div className="bg-lapacho-pink text-white px-2 py-1 font-serif font-bold text-xl rounded">LP</div>
             <span className="font-serif font-bold text-2xl tracking-tighter">Lapacho Post</span>
           </Link>
 
@@ -77,7 +77,7 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
                     </Link>
                     <button 
                       onClick={onLogout}
-                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded"
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-lapacho-pink hover:bg-lapacho-pink/5 rounded"
                     >
                       <LogOut className="w-4 h-4" />
                       Cerrar sesión
@@ -88,7 +88,7 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
             ) : (
               <Link 
                 to="/login" 
-                className="hidden md:block text-sm font-semibold bg-gray-900 text-white px-4 py-2 rounded hover:bg-gray-800 transition-colors"
+                className="hidden md:block text-sm font-semibold bg-lapacho-navy text-white px-4 py-2 rounded hover:opacity-90 transition-colors"
               >
                 Ingresar
               </Link>
@@ -108,14 +108,14 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
       <div className="border-b border-gray-100 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 overflow-x-auto no-scrollbar">
           <div className="flex items-center space-x-8 h-10 whitespace-nowrap">
-            <Link to="/" className="text-[10px] font-black uppercase text-gray-400 hover:text-red-600 transition-colors">
+            <Link to="/" className="text-[10px] font-black uppercase text-gray-400 hover:text-lapacho-pink transition-colors">
               Inicio
             </Link>
             {Array.isArray(categorias) && categorias.map((cat) => (
               <Link 
                 key={cat.id} 
                 to={`/?categoria=${cat.slug}`} 
-                className="text-[10px] font-black uppercase text-gray-900 hover:text-red-600 transition-colors"
+                className="text-[10px] font-black uppercase text-gray-900 hover:text-lapacho-pink transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
                 {cat.nombre}
@@ -144,7 +144,7 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
             >
               <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                 <Link to="/" className="flex items-center gap-2" onClick={() => setIsMenuOpen(false)}>
-                  <div className="bg-red-600 text-white px-2 py-1 font-serif font-bold text-xl rounded">LP</div>
+                  <div className="bg-lapacho-pink text-white px-2 py-1 font-serif font-bold text-xl rounded">LP</div>
                   <span className="font-serif font-bold text-xl tracking-tighter">Lapacho Post</span>
                 </Link>
               </div>
@@ -169,7 +169,7 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
                           </div>
                         )}
                       </div>
-                      <Link to="/dashboard" onClick={() => setIsMenuOpen(false)} className="text-[10px] uppercase font-black text-red-600">Ver Dashboard</Link>
+                      <Link to="/dashboard" onClick={() => setIsMenuOpen(false)} className="text-[10px] uppercase font-black text-lapacho-pink">Ver Dashboard</Link>
                     </div>
                   </div>
                 )}
@@ -200,7 +200,7 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
                         onLogout();
                         setIsMenuOpen(false);
                     }}
-                    className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold text-red-600 bg-red-50 rounded-xl"
+                    className="w-full flex items-center justify-center gap-2 p-3 text-sm font-bold text-lapacho-pink bg-lapacho-pink/5 rounded-xl"
                   >
                     <LogOut className="w-4 h-4" />
                     Cerrar Sesión
@@ -209,7 +209,7 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
                   <Link 
                     to="/login" 
                     onClick={() => setIsMenuOpen(false)}
-                    className="w-full flex items-center justify-center p-3 text-sm font-bold text-white bg-gray-900 rounded-xl"
+                    className="w-full flex items-center justify-center p-3 text-sm font-bold text-white bg-lapacho-navy rounded-xl"
                   >
                     Ingresar a mi cuenta
                   </Link>
@@ -233,12 +233,12 @@ export default function Navbar({ user, categorias, onLogout }: NavbarProps) {
               <input 
                 type="text" 
                 placeholder="Buscar noticias..." 
-                className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+                className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-lapacho-pink focus:border-lapacho-pink outline-none"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 autoFocus
               />
-              <button type="submit" className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold">
+              <button type="submit" className="bg-lapacho-pink text-white px-6 py-2 rounded-lg font-semibold">
                 Buscar
               </button>
             </form>

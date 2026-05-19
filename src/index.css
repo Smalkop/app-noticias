@@ -4,6 +4,8 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Playfair Display", ui-serif, Georgia, serif;
+  --color-lapacho-pink: #c91c5e;
+  --color-lapacho-navy: #001a41;
 }
 
 @layer base {
@@ -17,7 +19,7 @@
 }
 
 .news-card-title {
-  @apply font-serif text-xl font-bold leading-tight hover:text-blue-600 transition-colors;
+  @apply font-serif text-xl font-bold leading-tight hover:text-lapacho-pink transition-colors;
 }
 
 @utility no-scrollbar {

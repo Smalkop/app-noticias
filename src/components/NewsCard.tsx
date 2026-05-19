@@ -21,7 +21,7 @@ export default function NewsCard({ noticia, featured = false }: NewsCardProps) {
       <motion.div 
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
-        className="group relative overflow-hidden rounded-xl bg-gray-900 aspect-video"
+        className="group relative overflow-hidden rounded-xl bg-lapacho-navy aspect-video"
       >
         <img 
           src={noticia.imagen_destacada || 'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&auto=format&fit=crop&q=60'} 
@@ -31,12 +31,12 @@ export default function NewsCard({ noticia, featured = false }: NewsCardProps) {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-6 md:p-12 flex flex-col justify-end">
           {noticia.categoria_nombre && (
-            <Link to={`/?categoria=${noticia.categoria_slug || noticia.categoria_nombre.toLowerCase()}`} className="self-start bg-red-600 text-white text-xs font-bold px-2 py-1 rounded mb-4 uppercase tracking-widest">
+            <Link to={`/?categoria=${noticia.categoria_slug || noticia.categoria_nombre.toLowerCase()}`} className="self-start bg-lapacho-pink text-white text-xs font-bold px-2 py-1 rounded mb-4 uppercase tracking-widest">
               {noticia.categoria_nombre}
             </Link>
           )}
           <Link to={`/noticia/${noticia.id}`}>
-            <h2 className="font-serif text-3xl md:text-5xl font-bold text-white mb-4 group-hover:text-red-400 transition-colors">
+            <h2 className="font-serif text-3xl md:text-5xl font-bold text-white mb-4 group-hover:text-lapacho-pink transition-colors">
               {noticia.titulo}
             </h2>
           </Link>
@@ -75,7 +75,7 @@ export default function NewsCard({ noticia, featured = false }: NewsCardProps) {
       </Link>
       <div className="flex flex-col gap-2">
         {noticia.categoria_nombre && (
-          <Link to={`/?categoria=${noticia.categoria_slug || noticia.categoria_nombre.toLowerCase()}`} className="text-red-600 text-[10px] font-bold uppercase tracking-widest">
+          <Link to={`/?categoria=${noticia.categoria_slug || noticia.categoria_nombre.toLowerCase()}`} className="text-lapacho-pink text-[10px] font-bold uppercase tracking-widest">
             {noticia.categoria_nombre}
           </Link>
         )}

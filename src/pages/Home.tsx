@@ -55,7 +55,7 @@ export default function Home() {
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Search Header */}
       {(categoria || query) && (
-        <div className="mb-12 border-l-4 border-red-600 pl-6">
+        <div className="mb-12 border-l-4 border-lapacho-pink pl-6">
           <h1 className="text-4xl font-serif font-bold text-gray-900">
             {query ? `Busqueda: "${query}"` : categoria?.toUpperCase()}
           </h1>

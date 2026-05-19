@@ -406,10 +406,10 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
     <div className="max-w-7xl mx-auto px-4 py-8">
       <header className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
-          {user.foto_perfil ? (
-            <img src={user.foto_perfil} className="w-16 h-16 rounded-full object-cover border-2 border-red-100" />
+            {user.foto_perfil ? (
+            <img src={user.foto_perfil} className="w-16 h-16 rounded-full object-cover border-2 border-lapacho-pink/20" />
           ) : (
-            <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center text-red-500">
+            <div className="w-16 h-16 rounded-full bg-lapacho-pink/5 flex items-center justify-center text-lapacho-pink">
               <UserIcon className="w-8 h-8" />
             </div>
           )}
@@ -529,7 +529,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                           setSelectedNoticiaId(null);
                           setSelectedMetrica(null);
                         }}
-                        className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-red-600 transition-colors"
+                        className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-lapacho-pink transition-colors"
                       >
                         <ChevronLeft className="w-4 h-4" /> Volver al ranking
                       </button>
@@ -646,7 +646,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                               <button 
                                 key={p}
                                 onClick={() => setMetricPeriod(p)}
-                                className={`px-3 py-1 text-xs font-bold rounded-md transition-all capitalize ${metricPeriod === p ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                className={`px-3 py-1 text-xs font-bold rounded-md transition-all capitalize ${metricPeriod === p ? 'bg-white text-lapacho-pink shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
                               >
                                 {p === 'dia' ? 'Hoy' : p}
                               </button>
@@ -664,17 +664,17 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                                 {i + 1}
                               </div>
                               <div className="flex-1">
-                                <p className="font-bold text-gray-900 line-clamp-1 group-hover:text-red-600 transition-colors">{m.titulo}</p>
+                                <p className="font-bold text-gray-900 line-clamp-1 group-hover:text-lapacho-pink transition-colors">{m.titulo}</p>
                                 <div className="w-full bg-gray-100 h-1.5 rounded-full mt-2 overflow-hidden">
                                   <div 
-                                    className="bg-red-500 h-full rounded-full transition-all duration-1000" 
+                                    className="bg-lapacho-pink h-full rounded-full transition-all duration-1000" 
                                     style={{ width: `${(m.total_visitas / (metricas[0]?.total_visitas || 1)) * 100}%` }}
                                   ></div>
                                 </div>
                               </div>
                               <div className="text-right flex items-center gap-4">
                                 <span className="font-mono font-bold text-gray-900">{m.total_visitas}</span>
-                                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-red-500 transition-colors" />
+                                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-lapacho-pink transition-colors" />
                               </div>
                             </div>
                           )) : (
@@ -689,7 +689,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                       {(user.rol === 'autor' || user.rol === 'admin') && (
                         <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
                           <h3 className="text-xl font-bold mb-8 flex items-center gap-2">
-                            <Users className="w-5 h-5 text-red-600" /> Mis Suscriptores ({seguidores.length})
+                            <Users className="w-5 h-5 text-lapacho-pink" /> Mis Suscriptores ({seguidores.length})
                           </h3>
                           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
                             {seguidores.length > 0 ? seguidores.map((s) => (
@@ -715,7 +715,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                     </div>
 
                     <div className="space-y-8">
-                      <div className="bg-gradient-to-br from-red-600 to-red-800 text-white p-8 rounded-2xl shadow-xl flex flex-col justify-between">
+                      <div className="bg-gradient-to-br from-lapacho-pink to-lapacho-pink/80 text-white p-8 rounded-2xl shadow-xl flex flex-col justify-between">
                         <div>
                           <h3 className="text-lg font-bold opacity-80 mb-1">Impacto ({metricPeriod})</h3>
                           <p className="text-5xl font-serif font-bold">
@@ -733,7 +733,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
                       <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                         <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-red-600" /> Resumen de Actividad
+                          <Calendar className="w-4 h-4 text-lapacho-pink" /> Resumen de Actividad
                         </h4>
                         <div className="space-y-3">
                           <div className="flex justify-between text-sm">
@@ -760,29 +760,29 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
               <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center">
                   <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Bell className="w-5 h-5 text-red-600" /> Centro de Notificaciones
+                    <Bell className="w-5 h-5 text-lapacho-pink" /> Centro de Notificaciones
                   </h3>
                 </div>
                 
                 {misNoticias.filter(n => n.patrocinada && n.patrocinio_estado !== 'aceptado').length > 0 && (
-                  <div className="bg-red-50 p-6 border-b border-red-100">
+                  <div className="bg-lapacho-pink/5 p-6 border-b border-lapacho-pink/10">
                     <h4 className="text-sm font-black text-red-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                       <FileText className="w-4 h-4" /> Pendientes de Comprobante
                     </h4>
                     <div className="space-y-3">
                       {misNoticias.filter(n => n.patrocinada && n.patrocinio_estado !== 'aceptado').map(n => (
-                        <div key={n.id} className="bg-white p-4 rounded-xl border border-red-100 flex items-center justify-between gap-4">
+                        <div key={n.id} className="bg-white p-4 rounded-xl border border-lapacho-pink/10 flex items-center justify-between gap-4">
                           <div className="flex-1 min-w-0">
                             <p className="font-bold text-gray-900 line-clamp-1 truncate">{n.titulo}</p>
                             <p className="text-xs text-gray-500">{n.patrocinio_marca} • Gs. {Number(n.patrocinio_monto).toLocaleString()}</p>
                           </div>
                           <div className="flex items-center gap-3">
                             <span className={`text-[10px] font-black uppercase px-2 py-1 rounded bg-gray-100 ${
-                              n.patrocinio_estado === 'rechazado' ? 'text-red-600' : 'text-gray-500'
+                              n.patrocinio_estado === 'rechazado' ? 'text-lapacho-pink' : 'text-gray-500'
                             }`}>
                               {n.patrocinio_estado}
                             </span>
-                            <label className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer hover:bg-red-700 transition-colors">
+                            <label className="bg-lapacho-pink text-white px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer hover:opacity-90 transition-colors">
                               <input 
                                 type="file" 
                                 className="hidden" 
@@ -823,10 +823,10 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
                 <div className="divide-y divide-gray-50">
                   {notificaciones.length > 0 ? notificaciones.map((n) => (
-                    <div key={n.id} className={`p-6 flex gap-4 hover:bg-gray-50 transition-colors ${!n.leida ? 'bg-red-50/30' : ''}`}>
+                    <div key={n.id} className={`p-6 flex gap-4 hover:bg-gray-50 transition-colors ${!n.leida ? 'bg-lapacho-pink/5' : ''}`}>
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
                         n.tipo === 'verificacion' ? 'bg-green-100 text-green-600 border border-green-200' : 
-                        n.tipo === 'mensaje_admin' ? 'bg-red-600 text-white border-2 border-red-100 animate-pulse' :
+                        n.tipo === 'mensaje_admin' ? 'bg-lapacho-pink text-white border-2 border-lapacho-pink/10 animate-pulse' :
                         'bg-blue-100 text-blue-600 border border-blue-200'
                       }`}>
                          {n.tipo === 'mensaje_admin' ? <Send className="w-5 h-5" /> : <Bell className="w-5 h-5" />}
@@ -1121,7 +1121,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                     <button 
                       type="submit" 
                       disabled={!imagenUrl || uploading || !patrocinioMarca || !patrocinioMonto}
-                      className="md:col-span-2 bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-black transition-all disabled:opacity-50"
+                      className="md:col-span-2 bg-lapacho-navy text-white py-4 rounded-xl font-bold hover:opacity-90 transition-all disabled:opacity-50"
                     >
                       {uploading ? 'Procesando archivos...' : 'Registrar Solicitud de Patrocinio'}
                     </button>
@@ -1560,7 +1560,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
                   <button 
                     type="submit" 
-                    className="w-full bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-black transition-all"
+                    className="w-full bg-lapacho-navy text-white py-3 rounded-xl font-bold hover:opacity-90 transition-all"
                   >
                     Guardar Cambios
                   </button>
@@ -1781,7 +1781,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                     
                     <button 
                       onClick={handleUpdateUser}
-                      className="w-full bg-gray-900 text-white py-3 mt-8 rounded-xl font-bold hover:bg-black transition-all"
+                      className="w-full bg-lapacho-navy text-white py-3 mt-8 rounded-xl font-bold hover:opacity-90 transition-all"
                     >
                       Guardar Cambios del Usuario
                     </button>
@@ -2046,7 +2046,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                           } catch (e) { alert('❌ Error'); }
                         }
                       }}
-                      className="w-full bg-gray-900 text-white py-2.5 rounded-xl font-bold text-xs hover:bg-black transition-colors"
+                      className="w-full bg-lapacho-navy text-white py-2.5 rounded-xl font-bold text-xs hover:opacity-90 transition-colors"
                     >
                       Reparar Borrado
                     </button>
@@ -2244,7 +2244,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                     alert('Error en migración');
                   }
                 }}
-                className="bg-gray-900 text-white px-6 py-2 rounded-xl font-bold hover:bg-black transition-all shadow-sm"
+                className="bg-lapacho-navy text-white px-6 py-2 rounded-xl font-bold hover:opacity-90 transition-all shadow-sm"
               >
                 Migrar Base de Datos
               </button>
@@ -2260,7 +2260,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
 
 function MetricCard({ icon, label, value, subValue, color }: { icon: React.ReactNode, label: string, value: string | number, subValue: string, color: string }) {
   const colorMap: any = {
-    red: 'bg-red-50 text-red-600',
+    red: 'bg-lapacho-pink/5 text-lapacho-pink',
     blue: 'bg-blue-50 text-blue-600',
     purple: 'bg-purple-50 text-purple-600',
     amber: 'bg-amber-50 text-amber-600'
@@ -2273,7 +2273,7 @@ function MetricCard({ icon, label, value, subValue, color }: { icon: React.React
         <span className="text-[10px] font-black uppercase text-gray-400">{label}</span>
       </div>
       <div>
-        <p className="text-3xl font-black text-gray-900">{value}</p>
+        <p className="text-3xl font-black text-lapacho-navy">{value}</p>
         <p className="text-xs text-gray-500 mt-1">{subValue}</p>
       </div>
     </div>
@@ -2298,14 +2298,14 @@ function TabButton({ active, onClick, icon, label, badgeCount }: { active: boole
   return (
     <button 
       onClick={onClick}
-      className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm transition-all whitespace-nowrap relative ${active ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+      className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm transition-all whitespace-nowrap relative ${active ? 'bg-white text-lapacho-pink shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
     >
       {icon} 
       <span>{label}</span>
       {badgeCount !== undefined && badgeCount > 0 && (
         <div className="absolute -top-1 -right-1 flex h-4 w-4">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 border-2 border-white text-[8px] items-center justify-center text-white">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lapacho-pink/40 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-4 w-4 bg-lapacho-pink border-2 border-white text-[8px] items-center justify-center text-white">
             {badgeCount > 9 ? '9+' : badgeCount}
           </span>
         </div>

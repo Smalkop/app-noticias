@@ -34,15 +34,15 @@ export default function Register() {
         className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100"
       >
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-lapacho-pink/5 text-lapacho-pink rounded-2xl flex items-center justify-center mx-auto mb-4">
             <UserPlus className="w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-serif font-bold text-gray-900">Crea tu cuenta</h1>
+          <h1 className="text-3xl font-serif font-bold text-lapacho-navy">Crea tu cuenta</h1>
           <p className="text-gray-500 mt-2">Únete a nuestra red de redactores</p>
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg text-sm mb-6 border border-red-100">
+          <div className="bg-lapacho-pink/5 text-lapacho-pink p-4 rounded-lg text-sm mb-6 border border-lapacho-pink/10">
             {error}
           </div>
         )}
@@ -85,7 +85,7 @@ export default function Register() {
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-800 disabled:opacity-50 transition-all shadow-lg"
+            className="w-full bg-lapacho-navy text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-all shadow-lg"
           >
             {loading ? 'Registrando...' : 'Crear Cuenta'}
             <ArrowRight className="w-5 h-5" />
@@ -94,7 +94,7 @@ export default function Register() {
 
         <p className="text-center mt-8 text-sm text-gray-500">
           ¿Ya tienes cuenta?{' '}
-          <Link to="/login" className="text-red-600 font-bold hover:underline">
+          <Link to="/login" className="text-lapacho-pink font-bold hover:underline">
             Inicia sesión
           </Link>
         </p>

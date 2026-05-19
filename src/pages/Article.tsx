@@ -164,13 +164,13 @@ export default function Article({ user }: ArticleProps) {
       <div className="flex flex-col md:flex-row gap-12">
         {/* Main Content */}
         <div className="flex-1 max-w-4xl">
-          <Link to="/" className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-red-600 mb-8 transition-colors">
+          <Link to="/" className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-lapacho-pink mb-8 transition-colors">
             <ChevronLeft className="w-4 h-4" /> Volver al inicio
           </Link>
 
           <header className="mb-10">
             {noticia.categoria_nombre && (
-              <Link to={`/?categoria=${noticia.categoria_slug || noticia.categoria_nombre.toLowerCase()}`} className="text-red-600 font-bold text-sm uppercase tracking-widest block mb-4">
+              <Link to={`/?categoria=${noticia.categoria_slug || noticia.categoria_nombre.toLowerCase()}`} className="text-lapacho-pink font-bold text-sm uppercase tracking-widest block mb-4">
                 {noticia.categoria_nombre}
               </Link>
             )}
@@ -206,7 +206,7 @@ export default function Article({ user }: ArticleProps) {
                          initial={{ opacity: 0, y: 10 }}
                          animate={{ opacity: 1, y: 0 }}
                          exit={{ opacity: 0 }}
-                         className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap"
+                         className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-lapacho-navy text-white text-[10px] rounded whitespace-nowrap"
                        >
                          ¡Copiado!
                        </motion.div>
@@ -243,8 +243,8 @@ export default function Article({ user }: ArticleProps) {
                   onClick={() => handleReaccion(r.type)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all hover:scale-105 ${
                     noticia.mi_reaccion === r.type 
-                      ? 'bg-red-50 border-red-200 text-red-600 font-bold' 
-                      : 'bg-white border-gray-200 text-gray-600 hover:border-red-200'
+                      ? 'bg-lapacho-pink/5 border-lapacho-pink/20 text-lapacho-pink font-bold' 
+                      : 'bg-white border-gray-200 text-gray-600 hover:border-lapacho-pink/20'
                   }`}
                 >
                   <span>{r.emoji}</span>
@@ -279,7 +279,7 @@ export default function Article({ user }: ArticleProps) {
 
         {/* Sidebar */}
         <aside className="w-full md:w-80 flex flex-col gap-8">
-          <div className="bg-gray-900 text-white p-8 rounded-2xl sticky top-24">
+          <div className="bg-lapacho-navy text-white p-8 rounded-2xl sticky top-24">
             <h3 className="font-serif text-2xl font-bold mb-4">Sobre el autor</h3>
             <div className="flex items-center gap-4 mb-4">
                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
@@ -294,7 +294,7 @@ export default function Article({ user }: ArticleProps) {
             {shouldShowFollowButton && (
               <button 
                 onClick={handleFollow}
-                className="w-full py-3 bg-red-600 text-white rounded-lg font-bold text-sm hover:bg-red-700 transition-all shadow-lg shadow-red-900/20"
+                className="w-full py-3 bg-lapacho-pink text-white rounded-lg font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-lapacho-navy/20"
               >
                 Seguir autor
               </button>
@@ -307,17 +307,17 @@ export default function Article({ user }: ArticleProps) {
             )}
             
             {noticia.patrocinio_id && (
-              <div className="mt-8 p-6 bg-red-50 rounded-2xl border border-red-100 flex flex-col gap-4">
+              <div className="mt-8 p-6 bg-lapacho-pink/5 rounded-2xl border border-lapacho-pink/10 flex flex-col gap-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
-                  <span className="text-[10px] font-black text-red-600 uppercase tracking-widest">Contenido Patrocinado</span>
+                  <div className="w-2 h-2 bg-lapacho-pink rounded-full animate-pulse"></div>
+                  <span className="text-[10px] font-black text-lapacho-pink uppercase tracking-widest">Contenido Patrocinado</span>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 font-bold mb-1">Este espacio es posible gracias a:</p>
                   <p className="font-serif text-xl font-black text-gray-900 leading-tight">{noticia.patrocinio_marca}</p>
                   <p className="text-[10px] text-gray-400 font-mono mt-1">RUC: {noticia.patrocinio_ruc}</p>
                 </div>
-                <div className="pt-4 border-t border-red-100 italic text-[11px] text-red-700 leading-snug">
+                <div className="pt-4 border-t border-lapacho-pink/10 italic text-[11px] text-lapacho-pink leading-snug">
                   "Lapacho Post mantiene su independencia editorial. El contenido patrocinado no influye en nuestra línea periodística."
                 </div>
               </div>
