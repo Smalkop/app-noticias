@@ -92,6 +92,7 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
   // Sponsorship flow redesign
   const [misPatrocinios, setMisPatrocinios] = useState<any[]>([]);
   const [selectedPatrocinioId, setSelectedPatrocinioId] = useState<string | null>(null);
+  const [showBankInfo, setShowBankInfo] = useState(false);
 
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -1097,18 +1098,97 @@ export default function Dashboard({ user, onUserUpdate }: DashboardProps) {
                         onChange={(e) => setPatrocinioMonto(e.target.value)}
                         required
                       />
-                      <div className="flex items-center gap-4">
-                        <label className="flex-1 cursor-pointer bg-red-50 text-red-600 border-2 border-dashed border-red-200 rounded-xl p-3 text-center text-xs font-black uppercase hover:bg-red-100 transition-colors">
-                          <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'news')} />
-                          {uploading ? 'Subiendo...' : (imagenUrl ? 'Comprobante Listo' : 'Subir Comprobante de Transferencia')}
-                        </label>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <label className="flex-1 cursor-pointer bg-red-50 text-red-600 border-2 border-dashed border-red-200 rounded-xl p-3 text-center text-xs font-black uppercase hover:bg-red-100 transition-colors">
+                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'news')} />
+                            {uploading ? 'Subiendo...' : (imagenUrl ? 'Comprobante Listo ✅' : 'Subir Comprobante de Transferencia')}
+                          </label>
+                          <button 
+                            type="button"
+                            onClick={() => setShowBankInfo(true)}
+                            className="p-3 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center border border-gray-200"
+                            title="Ver Datos Bancarios"
+                          >
+                            <span className="text-xs font-black uppercase">¿A dónde envío?</span>
+                          </button>
+                        </div>
+                        {!imagenUrl && !uploading && (
+                          <p className="text-[10px] text-red-500 font-bold uppercase text-center">* Comprobante obligatorio</p>
+                        )}
                       </div>
                     </div>
-                    <button type="submit" className="md:col-span-2 bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-black transition-all">
-                      Registrar Solicitud
+                    <button 
+                      type="submit" 
+                      disabled={!imagenUrl || uploading || !patrocinioMarca || !patrocinioMonto}
+                      className="md:col-span-2 bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-black transition-all disabled:opacity-50"
+                    >
+                      {uploading ? 'Procesando archivos...' : 'Registrar Solicitud de Patrocinio'}
                     </button>
                   </form>
                 </div>
+
+                <AnimatePresence>
+                  {showBankInfo && (
+                    <motion.div 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                    >
+                      <motion.div 
+                        initial={{ scale: 0.9, y: 20 }}
+                        animate={{ scale: 1, y: 0 }}
+                        exit={{ scale: 0.9, y: 20 }}
+                        className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl"
+                      >
+                        <div className="bg-red-600 p-6 text-white flex justify-between items-center">
+                          <h4 className="text-xl font-serif font-black">Datos de Transferencia</h4>
+                          <button 
+                            onClick={() => setShowBankInfo(false)}
+                            className="bg-white/20 hover:bg-white/30 p-2 rounded-full transition-colors"
+                          >
+                            <XCircle className="w-6 h-6" />
+                          </button>
+                        </div>
+                        <div className="p-8 space-y-6">
+                          <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 space-y-4">
+                            <div className="flex justify-between items-center pb-3 border-b border-gray-200">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Banco</span>
+                              <span className="font-bold text-gray-900 italic">Banco Vision</span>
+                            </div>
+                            <div className="flex justify-between items-center pb-3 border-b border-gray-200">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Cuenta</span>
+                              <span className="font-mono font-bold text-gray-900">12.345.678 / 9</span>
+                            </div>
+                            <div className="flex justify-between items-center pb-3 border-b border-gray-200">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Titular</span>
+                              <span className="font-bold text-gray-900">Lapacho Post SRL</span>
+                            </div>
+                            <div className="flex justify-between items-center pb-3 border-b border-gray-200">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">RUC</span>
+                              <span className="font-bold text-gray-900">80099887-6</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tipo</span>
+                              <span className="font-bold text-gray-900">Caja de Ahorro</span>
+                            </div>
+                          </div>
+                          <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex gap-3">
+                            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                            <p className="text-[10px] font-bold text-amber-900 uppercase">Asegúrate de subir el comprobante una vez realizada la transferencia para validar tu solicitud.</p>
+                          </div>
+                          <button 
+                            onClick={() => setShowBankInfo(false)}
+                            className="w-full bg-black text-white py-4 rounded-xl font-bold hover:bg-gray-900 transition-all uppercase tracking-widest text-xs"
+                          >
+                            Entendido, cerrar
+                          </button>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                   <div className="p-6 border-b border-gray-100">

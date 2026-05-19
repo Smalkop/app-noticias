@@ -854,8 +854,8 @@ app.post('/api/patrocinios/solicitar', async (c) => {
     console.log('Sponsorship Request Body:', JSON.stringify(body));
     const { marca, ruc, monto, comprobante } = body;
     
-    if (!marca || monto === undefined || monto === null) {
-      return c.json({ error: 'Marca y monto son obligatorios' }, 400);
+    if (!marca || monto === undefined || monto === null || !comprobante) {
+      return c.json({ error: 'Marca, monto y comprobante son obligatorios' }, 400);
     }
 
     const id = crypto.randomUUID();
